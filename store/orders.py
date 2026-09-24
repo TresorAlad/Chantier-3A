@@ -1,0 +1,332 @@
+"""Order header persistence and status transitions."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from store import order_items as order_items_repo
+from store.rebind import rebind_query
+from store.store import NotFoundError, SoldOutError, Store, new_ulid
+from store.timeutil import text_to_null_time, text_to_time, time_to_text
+
+
+@dataclass
+class Order:
+    """Order."""
+    id: str
+    event_id: str
+    user_id: str | None
+    buyer_email: str
+    buyer_name: str
+    status: str
+    subtotal_minor: int
+    fee_minor: int
+    total_minor: int
+    currency: str
+    provider: str
+    provider_ref: str | None
+    created_at: datetime
+    paid_at: datetime | None
+
+
+@dataclass
+class OrderLine:
+    """Orderline."""
+    ticket_type_id: str
+    quantity: int
+    unit_price_minor: int
+
+
+def _scan_order(row) -> Order:
+    """Internal: scan order."""
+    if hasattr(row, "keys"):
+        return Order(
+            id=row["id"],
+            event_id=row["event_id"],
+            user_id=row["user_id"],
+            buyer_email=row["buyer_email"],
+            buyer_name=row["buyer_name"],
+            status=row["status"],
+            subtotal_minor=int(row["subtotal_minor"]),
+            fee_minor=int(row["fee_minor"]),
+            total_minor=int(row["total_minor"]),
+            currency=row["currency"],
+            provider=row["provider"],
+            provider_ref=row["provider_ref"],
+            created_at=text_to_time(row["created_at"]),
+            paid_at=text_to_null_time(row["paid_at"]),
+        )
+    return Order(
+        id=row[0],
+        event_id=row[1],
+        user_id=row[2],
+        buyer_email=row[3],
+        buyer_name=row[4],
+        status=row[5],
+        subtotal_minor=int(row[6]),
+        fee_minor=int(row[7]),
+        total_minor=int(row[8]),
+        currency=row[9],
+        provider=row[10],
+        provider_ref=row[11],
+        created_at=text_to_time(row[12]),
+        paid_at=text_to_null_time(row[13]),
+    )
+
+
+def get_order_by_id(st: Store, order_id: str) -> Order:
+    """Get order by id."""
+    row = st.fetchone(
+        """
+        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
+               subtotal_minor, fee_minor, total_minor, currency, provider,
+               provider_ref, created_at, paid_at
+        FROM orders WHERE id = ?
+        """,
+        (order_id,),
+    )
+    if row is None:
+        raise NotFoundError()
+    return _scan_order(row)
+
+
+def list_orders_for_user(st: Store, user_id: str) -> list[Order]:
+    """List orders for user."""
+    rows = st.fetchall(
+        """
+        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
+               subtotal_minor, fee_minor, total_minor, currency, provider,
+               provider_ref, created_at, paid_at
+        FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC
+        """,
+        (user_id,),
+    )
+    return [_scan_order(r) for r in rows]
+
+
+def list_orders_for_event(st: Store, event_id: str) -> list[Order]:
+    """List orders for event."""
+    rows = st.fetchall(
+        """
+        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
+               subtotal_minor, fee_minor, total_minor, currency, provider,
+               provider_ref, created_at, paid_at
+        FROM orders WHERE event_id = ? ORDER BY created_at DESC, id DESC
+        """,
+        (event_id,),
+    )
+    return [_scan_order(r) for r in rows]
+
+
+def _tx_exec(st: Store, conn, query: str, args: tuple) -> int:
+    """Internal: tx exec."""
+    q = rebind_query(query, st.driver)
+    cur = conn.execute(q, args)
+    return cur.rowcount
+
+
+def create_order_with_items(
+    st: Store, order: Order, lines: list[OrderLine]
+) -> list[order_items_repo.OrderItem]:
+    """Create order with items."""
+    if not lines:
+        raise ValueError("store: create order: no line items")
+    if not order.id:
+        order.id = new_ulid()
+    if not order.created_at:
+        order.created_at = datetime.now(timezone.utc)
+    if not order.status:
+        order.status = "pending"
+
+    conn = st.primary
+    if st.driver == "postgres":
+        with conn.transaction():
+            return _create_order_tx(st, conn, order, lines)
+    try:
+        items = _create_order_tx(st, conn, order, lines)
+        conn.commit()
+        return items
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
+    """Internal: create order tx."""
+    for ln in lines:
+        if ln.quantity <= 0:
+            raise ValueError("non-positive quantity")
+        n = _tx_exec(
+            st,
+            conn,
+            """
+            UPDATE ticket_types
+            SET quantity_sold = quantity_sold + ?
+            WHERE id = ? AND quantity_sold + ? <= quantity_total
+            """,
+            (ln.quantity, ln.ticket_type_id, ln.quantity),
+        )
+        if n == 0:
+            exists = conn.execute(
+                rebind_query(
+                    "SELECT COUNT(*) FROM ticket_types WHERE id = ?", st.driver
+                ),
+                (ln.ticket_type_id,),
+            ).fetchone()
+            cnt = exists[0] if not hasattr(exists, "keys") else exists["count"]
+            if int(cnt) == 0:
+                raise NotFoundError()
+            raise SoldOutError()
+
+    _tx_exec(
+        st,
+        conn,
+        """
+        INSERT INTO orders (id, event_id, user_id, buyer_email, buyer_name, status,
+            subtotal_minor, fee_minor, total_minor, currency, provider, provider_ref,
+            created_at, paid_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            order.id,
+            order.event_id,
+            order.user_id,
+            order.buyer_email,
+            order.buyer_name,
+            order.status,
+            order.subtotal_minor,
+            order.fee_minor,
+            order.total_minor,
+            order.currency,
+            order.provider,
+            order.provider_ref,
+            time_to_text(order.created_at),
+            time_to_text(order.paid_at) if order.paid_at else None,
+        ),
+    )
+
+    items: list[order_items_repo.OrderItem] = []
+    for ln in lines:
+        item_id = new_ulid()
+        _tx_exec(
+            st,
+            conn,
+            """
+            INSERT INTO order_items (id, order_id, ticket_type_id, quantity, unit_price_minor)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (item_id, order.id, ln.ticket_type_id, ln.quantity, ln.unit_price_minor),
+        )
+        items.append(
+            order_items_repo.OrderItem(
+                id=item_id,
+                order_id=order.id,
+                ticket_type_id=ln.ticket_type_id,
+                quantity=ln.quantity,
+                unit_price_minor=ln.unit_price_minor,
+            )
+        )
+    return items
+
+
+def cancel_order_release_inventory(st: Store, order_id: str) -> bool:
+    """Cancel order release inventory."""
+    conn = st.primary
+    if st.driver == "postgres":
+        with conn.transaction():
+            return _cancel_order_tx(st, conn, order_id)
+    try:
+        ok = _cancel_order_tx(st, conn, order_id)
+        conn.commit()
+        return ok
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _cancel_order_tx(st, conn, order_id: str) -> bool:
+    """Internal: cancel order tx."""
+    n = _tx_exec(
+        st,
+        conn,
+        "UPDATE orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
+        (order_id,),
+    )
+    if n == 0:
+        return False
+    q = rebind_query(
+        "SELECT ticket_type_id, quantity FROM order_items WHERE order_id = ?", st.driver
+    )
+    rows = conn.execute(q, (order_id,)).fetchall()
+    for row in rows:
+        tt_id = row["ticket_type_id"] if hasattr(row, "keys") else row[0]
+        qty = row["quantity"] if hasattr(row, "keys") else row[1]
+        _tx_exec(
+            st,
+            conn,
+            "UPDATE ticket_types SET quantity_sold = quantity_sold - ? WHERE id = ?",
+            (qty, tt_id),
+        )
+    return True
+
+
+def settle_order(st: Store, order_id: str, paid_at: datetime, tickets: list) -> bool:
+    """Settle order."""
+    from store import tickets as tickets_repo
+
+    conn = st.primary
+    if st.driver == "postgres":
+        with conn.transaction():
+            return _settle_order_tx(st, conn, order_id, paid_at, tickets)
+    try:
+        ok = _settle_order_tx(st, conn, order_id, paid_at, tickets)
+        conn.commit()
+        return ok
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _settle_order_tx(st, conn, order_id: str, paid_at: datetime, tickets: list) -> bool:
+    """Internal: settle order tx."""
+    from store import tickets as tickets_repo
+
+    n = _tx_exec(
+        st,
+        conn,
+        "UPDATE orders SET status = 'paid', paid_at = ? WHERE id = ? AND status = 'pending'",
+        (time_to_text(paid_at), order_id),
+    )
+    if n == 0:
+        return False
+    for t in tickets:
+        if isinstance(t, tickets_repo.Ticket):
+            tk = t
+        else:
+            tk = t
+        tid = tk.id or new_ulid()
+        status = tk.status or "valid"
+        _tx_exec(
+            st,
+            conn,
+            """
+            INSERT INTO tickets (id, order_id, event_id, ticket_type_id, holder_user_id,
+                holder_name, serial, capability, status, issued_at, voided_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tid,
+                tk.order_id,
+                tk.event_id,
+                tk.ticket_type_id,
+                tk.holder_user_id,
+                tk.holder_name,
+                tk.serial,
+                tk.capability,
+                status,
+                time_to_text(tk.issued_at),
+                time_to_text(tk.voided_at) if tk.voided_at else None,
+            ),
+        )
+    return True

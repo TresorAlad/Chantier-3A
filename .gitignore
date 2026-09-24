@@ -1,0 +1,7 @@
+.venv/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.cackle_session_secret
+*.db
+.env
