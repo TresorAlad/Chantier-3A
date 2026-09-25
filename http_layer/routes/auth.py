@@ -25,6 +25,13 @@ class CredentialsBody(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class SignupWithInviteBody(BaseModel):
+    """Create a staff account from an org invite token."""
+    token: str = ""
+    password: str = ""
+    name: str = ""
+
+
 def _user_view(u: User) -> dict:
     """Internal: user view."""
     out = {
@@ -51,7 +58,13 @@ def signup(
     body: CredentialsBody,
     state: AppState = Depends(get_app_state),
 ) -> Response:
-    """Register a new user; raises if email is taken or password is weak."""
+    """Register a new user; disabled when public signup is off (staff uses invite flow)."""
+    if not state.config.public_signup:
+        return json_error(
+            403,
+            "forbidden",
+            "public signup is disabled; use an administrator invite to create an account",
+        )
     try:
         user = auth_svc.signup(state.store, body.email, body.password, body.name)
     except auth_svc.InvalidEmail:
@@ -60,6 +73,35 @@ def signup(
         return json_error(400, "invalid_request", "password too short")
     except auth_svc.EmailTaken:
         return json_error(409, "conflict", "an account with that email already exists")
+    except Exception:
+        return json_error(500, "internal_error", "internal error")
+
+    token, expires = auth_svc.create_session(state.store, user.id)
+    payload = {"user": _user_view(user), "token": token}
+    resp = Response(content=json.dumps(payload), media_type="application/json")
+    set_session_cookies(resp, token, expires, state.config.session_secret, _secure_request(request))
+    return resp
+
+
+@router.post("/signup-with-invite")
+def signup_with_invite(
+    request: Request,
+    body: SignupWithInviteBody,
+    state: AppState = Depends(get_app_state),
+) -> Response:
+    """Create a staff account from an org invite (replaces public signup)."""
+    if not body.token or not body.password:
+        return json_error(400, "invalid_request", "token and password are required")
+    try:
+        user, _org_id = auth_svc.signup_with_invite(
+            state.store, body.token, body.password, body.name
+        )
+    except auth_svc.InvalidInvite:
+        return json_error(400, "invalid_request", "invite is invalid, expired, or already used")
+    except auth_svc.WeakPassword:
+        return json_error(400, "invalid_request", "password too short")
+    except auth_svc.EmailTaken:
+        return json_error(409, "conflict", "an account with that email already exists; log in and accept the invite")
     except Exception:
         return json_error(500, "internal_error", "internal error")
 

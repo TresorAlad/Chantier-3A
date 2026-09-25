@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi.testclient import TestClient
 
 from bootstrap import build_services
 from config import load_config
@@ -24,6 +25,13 @@ def demo_store(tmp_path):
     app = create_app(store, cfg, services)
     yield store, cfg, services, app
     store.close()
+
+
+@pytest.fixture()
+def client(demo_store):
+    """FastAPI test client bound to the in-memory demo app."""
+    _store, _cfg, _services, app = demo_store
+    return TestClient(app)
 
 
 def seed_published_event(store, *, price_minor: int = 15000) -> dict:

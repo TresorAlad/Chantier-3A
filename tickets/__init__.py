@@ -1,1 +1,1 @@
-"""Ed25519-signed ticket capabilities (offline-verifiable QR tokens)."""
+"""Ed25519-signed ticket capabilities (QR payload for door verification)."""

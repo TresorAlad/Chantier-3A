@@ -67,6 +67,12 @@ class NoSuchUser(AuthError):
     pass
 
 
+class InvalidInvite(AuthError):
+    """Org invite token is invalid, expired, or already used."""
+
+    pass
+
+
 def _normalize_email(email: str) -> str:
     """Internal: normalize email."""
     e = email.strip().lower()
@@ -95,6 +101,36 @@ def signup(st: Store, email: str, password: str, name: str) -> User:
         pass
     ph = hash_password(password)
     return user_store.create_user(st, norm, ph, name.strip())
+
+
+def signup_with_invite(st: Store, invite_token: str, password: str, name: str) -> tuple[User, str]:
+    """Register using an org invite token and join the organisation."""
+    from store import orgs as orgs_repo
+
+    token = invite_token.strip()
+    if not token:
+        raise InvalidInvite()
+    token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+    try:
+        inv = orgs_repo.get_org_invite_by_token_hash(st, token_hash)
+    except NotFoundError as err:
+        raise InvalidInvite() from err
+    now = datetime.now(timezone.utc)
+    if inv.accepted_at is not None or inv.expires_at <= now:
+        raise InvalidInvite()
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise WeakPassword()
+    try:
+        user_store.get_user_by_email(st, inv.email)
+        raise EmailTaken()
+    except NotFoundError:
+        pass
+    ph = hash_password(password)
+    display = name.strip() or inv.email.split("@")[0]
+    user = user_store.create_user(st, inv.email, ph, display)
+    orgs_repo.add_org_member(st, inv.org_id, user.id, inv.role, now)
+    orgs_repo.mark_invite_accepted(st, inv.id, now)
+    return user, inv.org_id
 
 
 def login(st: Store, email: str, password: str) -> User:

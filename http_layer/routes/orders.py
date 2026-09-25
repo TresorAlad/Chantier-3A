@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from auth import rbac
@@ -159,6 +159,39 @@ def get_order(order_id: str, state: AppState = Depends(require_user)):
     if not order.user_id or order.user_id != state.current_user.id:
         return json_error(404, "not_found", "order not found")
     return {"order": _order_json(order)}
+
+
+@router.get("/orders/{order_id}/guest")
+def get_order_guest(
+    order_id: str,
+    email: str = Query(""),
+    state: AppState = Depends(get_app_state),
+):
+    """Guest order lookup by id + buyer email (no account required)."""
+    buyer_email = email.strip().lower()
+    if not buyer_email:
+        return json_error(400, "invalid_request", "email query parameter is required")
+    try:
+        order = state.services.orders.get(order_id)
+    except NotFoundError:
+        return json_error(404, "not_found", "order not found")
+    if order.buyer_email.strip().lower() != buyer_email:
+        return json_error(404, "not_found", "order not found")
+    from store import tickets as tickets_repo
+
+    tickets = []
+    if order.status == "paid":
+        for t in tickets_repo.list_tickets_for_order(state.store, order_id):
+            tickets.append(
+                {
+                    "id": t.id,
+                    "serial": t.serial,
+                    "capability": t.capability,
+                    "status": t.status,
+                    "ticket_type_id": t.ticket_type_id,
+                }
+            )
+    return {"order": _order_json(order), "tickets": tickets}
 
 
 @router.get("/events/{event_id}/orders")

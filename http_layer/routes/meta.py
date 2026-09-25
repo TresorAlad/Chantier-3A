@@ -35,6 +35,8 @@ def site_config(state: AppState = Depends(get_app_state)) -> dict:
         "host_org": cfg.host_org,
         "org_create_disabled": org_create_disabled,
         "email_configured": bool(cfg.smtp_from and cfg.smtp_host),
+        "public_signup": cfg.public_signup,
+        "visitor_checkout_without_account": True,
     }
 
 

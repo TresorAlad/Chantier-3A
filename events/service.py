@@ -348,6 +348,15 @@ def list_ticket_types(st: Store, event_id: str) -> list[dict]:
     return [ticket_type_to_json(t) for t in tt_repo.list_ticket_types_for_event(st, event_id)]
 
 
+def list_storefront_products(st: Store, event_id: str) -> list[dict]:
+    """Active passes, goodies, and options for public checkout (no auth)."""
+    return [
+        ticket_type_to_json(t)
+        for t in tt_repo.list_ticket_types_for_event(st, event_id)
+        if t.status == "active"
+    ]
+
+
 def _validate_ticket_type_input(body: dict, *, existing: tt_repo.TicketType | None = None) -> None:
     """Internal: validate ticket type input."""
     if existing is None and not str(body.get("name") or "").strip():

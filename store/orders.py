@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from store import order_items as order_items_repo
 from store.rebind import rebind_query
@@ -180,7 +182,8 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
             """
             UPDATE ticket_types
             SET quantity_sold = quantity_sold + ?
-            WHERE id = ? AND quantity_sold + ? <= quantity_total
+            WHERE id = ?
+              AND (quantity_total = 0 OR quantity_sold + ? <= quantity_total)
             """,
             (ln.quantity, ln.ticket_type_id, ln.quantity),
         )
@@ -191,7 +194,7 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
                 ),
                 (ln.ticket_type_id,),
             ).fetchone()
-            cnt = exists[0] if not hasattr(exists, "keys") else exists["count"]
+            cnt = exists[0] if exists is not None else 0
             if int(cnt) == 0:
                 raise NotFoundError()
             raise SoldOutError()
@@ -294,16 +297,21 @@ def _cancel_order_tx(st, conn, order_id: str) -> bool:
     return True
 
 
-def settle_order(st: Store, order_id: str, paid_at: datetime, tickets: list) -> bool:
+def settle_order(
+    st: Store,
+    order_id: str,
+    paid_at: datetime,
+    tickets: list | None = None,
+    *,
+    mint: Callable[[Any], list] | None = None,
+) -> bool:
     """Settle order."""
-    from store import tickets as tickets_repo
-
     conn = st.primary
     if st.driver == "postgres":
         with conn.transaction():
-            return _settle_order_tx(st, conn, order_id, paid_at, tickets)
+            return _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
     try:
-        ok = _settle_order_tx(st, conn, order_id, paid_at, tickets)
+        ok = _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
         conn.commit()
         return ok
     except Exception:
@@ -311,7 +319,14 @@ def settle_order(st: Store, order_id: str, paid_at: datetime, tickets: list) -> 
         raise
 
 
-def _settle_order_tx(st, conn, order_id: str, paid_at: datetime, tickets: list) -> bool:
+def _settle_order_tx(
+    st,
+    conn,
+    order_id: str,
+    paid_at: datetime,
+    tickets: list | None,
+    mint: Callable[[Any], list] | None = None,
+) -> bool:
     """Internal: settle order tx."""
     from store import tickets as tickets_repo
 
@@ -323,6 +338,10 @@ def _settle_order_tx(st, conn, order_id: str, paid_at: datetime, tickets: list) 
     )
     if n == 0:
         return False
+    if mint is not None:
+        tickets = mint(conn)
+    if not tickets:
+        return True
     for t in tickets:
         if isinstance(t, tickets_repo.Ticket):
             tk = t

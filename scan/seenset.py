@@ -1,4 +1,4 @@
-"""Bloom-style seen ticket set for duplicate scan detection offline."""
+"""Seen-ticket abstraction for duplicate scan detection at the door."""
 
 from __future__ import annotations
 

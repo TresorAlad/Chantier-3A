@@ -79,7 +79,9 @@ def test_free_student_pass_checkout(client: TestClient, demo_store):
     verify = client.post("/api/payments/verify", json={"reference": body["order"]["id"]})
     assert verify.status_code == 200, verify.text
     assert verify.json()["order"]["status"] == "paid"
-    assert len(verify.json()["tickets"]) == 1
+    tickets = verify.json()["tickets"]
+    assert len(tickets) == 1
+    assert tickets[0]["serial"].startswith("TDEV-")
     reg = verify.json()["order"]["registration"]
     assert reg["school_name"] == "Universite Cheikh Anta Diop"
     assert reg["motivation"]

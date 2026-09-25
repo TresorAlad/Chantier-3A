@@ -18,12 +18,6 @@ def _auth_headers(client: TestClient, email: str, password: str) -> dict[str, st
     return {"Authorization": f"Bearer {data['token']}"}
 
 
-@pytest.fixture()
-def client(demo_store):
-    _store, _cfg, _services, app = demo_store
-    return TestClient(app)
-
-
 def test_meta_and_public(client):
     assert client.get("/healthz").status_code == 200
     assert client.get("/api/public/site-config").status_code == 200

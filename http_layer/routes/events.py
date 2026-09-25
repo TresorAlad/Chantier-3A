@@ -46,7 +46,7 @@ def list_public_events(
         "name": events_svc.host_display_name(state.config, scope, org_views),
         "organisations": org_views,
         "multi_org": len(org_views) > 1,
-        "peers_included": scope == "peers",
+        "peers_included": False,
     }
 
     if host:

@@ -28,7 +28,6 @@ from http_layer.routes import (
     payments,
     scan,
     stubs,
-    sync,
     tickets,
 )
 from http_layer.session import check_csrf, extract_token
@@ -103,8 +102,6 @@ def create_app(
     api.include_router(payments.router)
     api.include_router(tickets.router)
     api.include_router(scan.router)
-    api.include_router(sync.router)
-    api.include_router(sync.peer_router)
     api.include_router(extras.router)
     api.include_router(extras.images_router)
     app.add_middleware(ScanRateLimitMiddleware)

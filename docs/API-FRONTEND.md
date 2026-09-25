@@ -86,6 +86,8 @@ Reponse `200` :
 | `host_org` | string | Slug org hote |
 | `org_create_disabled` | bool | Creation org desactivee |
 | `email_configured` | bool | SMTP configure |
+| `public_signup` | bool | Inscription libre (`POST /api/auth/signup`). `false` en prod sauf `CHANTIER3A_PUBLIC_SIGNUP=1` ou mode demo |
+| `visitor_checkout_without_account` | bool | Toujours `true` : parcours visiteur sans compte |
 
 ### GET `/api/categories`
 
@@ -116,7 +118,22 @@ Corps JSON :
 | `name` | string | non |
 
 Reponse `200` : `{ "user": { id, email, name, created_at, email_verified_at? }, "token": "..." }`  
-Erreurs : `400` email/password, `409` email deja pris.
+Erreurs : `400` email/password, `409` email deja pris, `403 forbidden` si `public_signup` est `false` (comptes staff via invite uniquement).
+
+### POST `/api/auth/signup-with-invite`
+
+Auth : Non.
+
+Corps JSON :
+
+| Champ | Type | Obligatoire |
+|-------|------|-------------|
+| `token` | string | oui (token renvoye par `POST /api/orgs/{org_id}/invites`) |
+| `password` | string | oui |
+| `name` | string | non |
+
+Reponse `200` : meme forme que signup (session + token). L'utilisateur est membre de l'org avec le role de l'invite.  
+Erreurs : `400` invite invalide ou expire, `409` email deja pris (se connecter puis `POST /api/invites/accept`).
 
 ### POST `/api/auth/login`
 
@@ -172,13 +189,15 @@ Query :
 | `to` | | Fin (RFC3339) |
 | `limit` | | Max resultats (>= 0) |
 
-Reponse `200` : `{ "events": [ ... ], "host": { scope, name, organisations, multi_org, peers_included, org? } }`
+Reponse `200` : `{ "events": [ ... ], "host": { scope, name, organisations, multi_org, peers_included, org? } }` (`peers_included` est toujours `false`, legacy.)
 
 ### GET `/api/events/{event_id}`
 
 Auth : Non. `event_id` = id ULID ou slug.
 
 Reponse `200` : `{ "event", "ticket_types", "issuer_keys", "gallery": [] }`
+
+Evenement **publie** : accessible sans session. `ticket_types` ne contient que les lignes **actives** (billets, goodies, options) pour le catalogue visiteur.
 
 ---
 
@@ -352,6 +371,8 @@ Auth : Oui. Meme `404` pour l'instant.
 
 ## Commandes et paiement visiteur
 
+Parcours **sans compte** : consulter `GET /api/events/` et `GET /api/events/{id}`, creer une commande avec l'email acheteur, regler via le provider (demo : `stub` + `POST /api/payments/verify`), recevoir le mail de confirmation (pass QR pour les produits `product_kind: ticket`, pas de QR pour un goodie seul). Suivi commande : `GET /api/orders/{id}/guest?email=...`. Les comptes utilisateur sont reserves au staff (invite admin) sauf si `public_signup` est active.
+
 ### POST `/api/orders`
 
 Auth : Non (si session cookie active, CSRF requis sur POST).
@@ -399,6 +420,15 @@ Auth : Oui. Liste des commandes de l'utilisateur connecte.
 
 Auth : Oui (proprietaire uniquement).
 
+### GET `/api/orders/{order_id}/guest`
+
+Auth : Non.
+
+Query : `email` (obligatoire, meme adresse que `buyer.email` a la commande).
+
+Reponse `200` : `{ "order", "tickets" }` si la commande est payee (`tickets` avec `serial`, `capability` pour les billets).  
+Erreurs : `400` email manquant, `404` si id ou email ne correspondent pas (reponse identique pour ne pas fuiter l'existence d'une commande).
+
 ### GET `/api/events/{event_id}/orders`
 
 Auth : admin+ sur l'evenement.
@@ -424,9 +454,21 @@ Reponse : `{ "order", "tickets" }` ou `402 payment_not_confirmed`.
 
 Auth : Non (signature provider). Corps brut + en-tetes provider.
 
+Contrat complet backend ↔ microservice paiement (FedaPay, etc.) :
+[`docs/PAYMENT-SERVICE.md`](PAYMENT-SERVICE.md).
+
 ---
 
 ## Billets acheteur
+
+Chaque billet expose :
+
+| Champ | Role |
+|-------|------|
+| `serial` | Reference publique `TDEV-YYYY-NNNN` (affichage participant, PDF). |
+| `capability` | **Contenu exact du QR** : token Ed25519 `chantier3a.<payload>.<sig>` (voir [`PASS-FORMAT.md`](PASS-FORMAT.md)). Pas d'encodage HMAC supplementaire cote front. |
+
+Le payload signe inclut `ref` (meme valeur que `serial`), `nbf` / `exp` alignes sur la fenetre de l'evenement, et `tid` (ULID technique pour l'admission).
 
 ### GET `/api/tickets`
 
@@ -444,11 +486,9 @@ Reponse : `text/plain` (placeholder PDF).
 
 ---
 
-## Scan porte
+## Scan porte (en ligne uniquement)
 
-### GET `/api/events/{event_id}/scan-bundle`
-
-Auth : scanner+.
+Chaque scan appelle le backend (pas de bundle offline ni de sync différée). Voir [`V1-SCOPE.md`](V1-SCOPE.md).
 
 ### POST `/api/scan`
 
@@ -466,48 +506,11 @@ Corps :
 }
 ```
 
-Reponse : `{ "result", "reason", "ticket_id" }`
-
-### POST `/api/scan/sync`
-
-Auth : scanner+.
-
-Corps : `{ "admissions": [ { ticket_id, event_id, gate_id, device_id, scanned_at, result } ] }`  
-Reponse : `{ "applied": [ bool, ... ] }`
+Reponse : `{ "result", "reason", "ticket_id" }` avec `result` dans `admitted`, `duplicate`, `invalid`, `wrong_event` (QR pour un autre evenement que `event_id` du corps).
 
 ### GET `/api/events/{event_id}/attendees`
 
 Auth : scanner+.
-
----
-
-## Sync multi-noeuds (avance)
-
-### GET `/api/sync/status?org={org_id}`
-
-Auth : owner.
-
-### POST `/api/sync/peers`
-
-Corps : `{ "org_id", "public_key", "name?", "url?" }`
-
-### DELETE `/api/sync/peers/{peer_id}`
-
-### POST `/api/sync/peers/{peer_id}/sync`
-
-Lance un cycle de sync manuel.
-
-### GET/POST `/api/sync/ops`
-
-Auth : **peer** (Ed25519, en-tetes dedies). Pas pour le frontend classique.
-
-### GET `/api/peer-events?org=`
-
-Auth : Non. Reponse : `{ "events": [] }`
-
-### Routes `/api/sync/feed` et `/api/sync/peers/{id}/feed`
-
-Stubs ou auth peer; usage limite cote UI.
 
 ---
 

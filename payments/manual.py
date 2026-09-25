@@ -1,4 +1,4 @@
-"""Manual/offline payment provider for bank transfer instructions."""
+"""Manual payment provider for bank transfer instructions."""
 
 from __future__ import annotations
 

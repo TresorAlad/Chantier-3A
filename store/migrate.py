@@ -90,6 +90,18 @@ def migrate_sqlite(path: str) -> list[int]:
         conn.close()
 
 
+def migrate_store(*, database_url: str, sqlite_path: str) -> tuple[str, list[int]]:
+    """Apply all pending SQL migrations to the database configured in ``.env``.
+
+    If ``database_url`` is set, only PostgreSQL is migrated. Otherwise SQLite at
+    ``sqlite_path`` is migrated. One target per run; no demo/prod split.
+    """
+    url = (database_url or "").strip()
+    if url:
+        return ("postgresql", migrate_postgres(url))
+    return ("sqlite", migrate_sqlite(sqlite_path))
+
+
 def migrate_postgres(database_url: str) -> list[int]:
     """Migrate postgres."""
     conn = psycopg.connect(database_url)

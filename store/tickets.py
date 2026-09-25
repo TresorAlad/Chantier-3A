@@ -95,19 +95,3 @@ def list_tickets_for_user(st: Store, user_id: str) -> list[Ticket]:
         (user_id,),
     )
     return [_scan(r) for r in rows]
-
-
-def list_valid_ticket_ids_for_event(st: Store, event_id: str) -> list[str]:
-    """List valid ticket ids for event."""
-    rows = st.fetchall(
-        """
-        SELECT id FROM tickets
-        WHERE event_id = ? AND status = 'valid'
-        ORDER BY id ASC
-        """,
-        (event_id,),
-    )
-    out: list[str] = []
-    for row in rows:
-        out.append(row["id"] if hasattr(row, "keys") else row[0])
-    return out

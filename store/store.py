@@ -1,8 +1,7 @@
-"""SQLite and dual-database connection wrapper with query helpers."""
+"""SQLite and PostgreSQL connection wrapper with query helpers."""
 
 from __future__ import annotations
 
-import logging
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -15,7 +14,6 @@ from store.migrate import migrate_postgres, migrate_sqlite
 from store.rebind import rebind_query
 
 Driver = Literal["sqlite", "postgres"]
-log = logging.getLogger("chantier3a.store")
 
 
 class NotFoundError(Exception):
@@ -34,7 +32,6 @@ class Store:
     driver: Driver
     _pg: psycopg.Connection | None = None
     _sqlite: sqlite3.Connection | None = None
-    _sqlite_mirror_path: str | None = None
     _vault: object | None = None
 
     @property
@@ -55,19 +52,6 @@ class Store:
             self._sqlite.close()
             self._sqlite = None
 
-    def _mirror_exec(self, query: str, args: tuple[Any, ...]) -> None:
-        """Mirror exec on ``Store``."""
-        if self._sqlite_mirror_path is None or self.driver != "postgres":
-            return
-        if self._sqlite is None:
-            self._sqlite = sqlite3.connect(self._sqlite_mirror_path)
-            self._sqlite.execute("PRAGMA foreign_keys = ON")
-        try:
-            self._sqlite.execute(query, args)
-            self._sqlite.commit()
-        except sqlite3.Error as err:
-            log.warning("sqlite mirror write failed: %s", err)
-
     def execute(self, query: str, args: tuple[Any, ...] = ()) -> None:
         """Execute on ``Store``."""
         self.execute_rowcount(query, args)
@@ -79,9 +63,7 @@ class Store:
             assert self._pg is not None
             cur = self._pg.execute(q, args)
             self._pg.commit()
-            n = cur.rowcount
-            self._mirror_exec(query, args)
-            return n
+            return cur.rowcount
         assert self._sqlite is not None
         cur = self._sqlite.execute(q, args)
         self._sqlite.commit()
@@ -135,16 +117,11 @@ def open_sqlite(path: str) -> Store:
     return Store(driver="sqlite", _sqlite=conn)
 
 
-def open_dual(database_url: str, sqlite_path: str) -> Store:
-    """Open SQLite locally and optionally mirror writes to Postgres when configured."""
+def open_postgres(database_url: str) -> Store:
+    """Open PostgreSQL (online-only deployment)."""
     migrate_postgres(database_url)
-    migrate_sqlite(sqlite_path)
     pg = psycopg.connect(database_url, row_factory=dict_row)
-    return Store(
-        driver="postgres",
-        _pg=pg,
-        _sqlite_mirror_path=sqlite_path,
-    )
+    return Store(driver="postgres", _pg=pg)
 
 
 def new_ulid() -> str:

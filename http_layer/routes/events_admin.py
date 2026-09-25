@@ -37,10 +37,19 @@ def create_event(body: dict, state: AppState = Depends(require_user)):
 
 @router.get("/{event_id}")
 def get_event(event_id: str, state: AppState = Depends(get_app_state)):
-    """Get event."""
+    """Public storefront: published event + active catalog (passes, goodies)."""
     try:
         ev = events_svc.get_by_slug_or_id(state.store, event_id)
-        types = events_svc.list_ticket_types(state.store, ev["id"])
+    except NotFoundError:
+        return json_error(404, "not_found", "event not found")
+    if ev.get("status") != "published":
+        user = state.current_user
+        if user is None or not rbac.can_manage_event(
+            state.store, user.id, ev["id"], rbac.ROLE_ADMIN
+        ):
+            return json_error(404, "not_found", "event not found")
+    try:
+        types = events_svc.list_storefront_products(state.store, ev["id"])
         keys = events_svc.issuer_keys_json(state.store, ev["id"])
     except NotFoundError:
         return json_error(404, "not_found", "event not found")

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 _BACKEND_ROOT = Path(__file__).resolve().parent
 _ENV_LOADED = False
 
-HostScope = Literal["own", "single", "peers"]
+HostScope = Literal["own", "single"]
 
 ENV_ADDR = "CHANTIER3A_ADDR"
 ENV_DB = "CHANTIER3A_DB"
@@ -37,6 +37,7 @@ ENV_PAYMENT_WEBHOOK_SECRET = "CHANTIER3A_PAYMENT_WEBHOOK_SECRET"
 ENV_PAYMENT_PROVIDER_NAME = "CHANTIER3A_PAYMENT_PROVIDER_NAME"
 ENV_PAYMENT_SERVICE_TIMEOUT = "CHANTIER3A_PAYMENT_SERVICE_TIMEOUT"
 ENV_KEY_PASSPHRASE = "CHANTIER3A_KEY_PASSPHRASE"
+ENV_PUBLIC_SIGNUP = "CHANTIER3A_PUBLIC_SIGNUP"
 
 DEFAULT_ADDR = ":8080"
 DEFAULT_DB = "./billetterie.db"
@@ -68,6 +69,7 @@ class Config:
     payment_webhook_secret: str
     payment_provider_name: str
     payment_service_timeout: int
+    public_signup: bool
 
 
 def load_env_file() -> Path | None:
@@ -125,7 +127,7 @@ def load_config(
     database_url = _env(ENV_DATABASE_URL)
 
     scope = _env(ENV_HOST_SCOPE, "own") or "own"
-    if scope not in ("own", "single", "peers"):
+    if scope not in ("own", "single"):
         scope = "own"
 
     smtp_port = 587
@@ -170,4 +172,5 @@ def load_config(
         payment_webhook_secret=_env(ENV_PAYMENT_WEBHOOK_SECRET),
         payment_provider_name=_env(ENV_PAYMENT_PROVIDER_NAME) or "community-pay",
         payment_service_timeout=pay_timeout,
+        public_signup=demo or _truthy(ENV_PUBLIC_SIGNUP),
     )

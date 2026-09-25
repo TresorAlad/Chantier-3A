@@ -1,4 +1,4 @@
-"""Verify ticket capabilities and enforce one-scan admission rules."""
+"""Verify ticket capabilities and enforce one-scan admission rules (online API)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from scan import bundle as bundle_mod
 from scan.seenset import SeenSet
+from store.store import Store
 from tickets import capability as cap
 
 
@@ -33,29 +33,28 @@ def decide(
     event_id: str,
     seen: SeenSet,
     now: datetime,
+    *,
+    store: Store | None = None,
 ) -> Result:
     """Verify signature and expiry, then admit or flag duplicate scan."""
     payload, terminal, ok = _verify_for_event(token, ring, event_id, now)
     if not ok:
         return terminal
+    if store is not None:
+        blocked = _reject_if_ticket_not_valid(store, payload)
+        if blocked is not None:
+            return blocked
     return _admit_or_duplicate(payload, seen, now)
 
 
-def decide_with_bundle(token: str, b: bundle_mod.Bundle, seen: SeenSet, now: datetime) -> Result:
-    """Offline admission using a downloaded bundle (keys, index, seen hints)."""
-    payload, terminal, ok = _verify_for_event(token, b.issuer_keys, b.event.event_id, now)
-    if not ok:
-        return terminal
-    if b.ticket_index_present and payload.tid not in b.ticket_index:
-        return Result(Status.INVALID, reason="ticket revoked or not issued for this event")
-    if payload.tid in b.admitted_index:
-        seen.mark_seen(payload.tid, now)
-        return Result(
-            Status.DUPLICATE,
-            payload=payload,
-            reason="ticket already admitted at another gate",
-        )
-    return _admit_or_duplicate(payload, seen, now)
+def _reject_if_ticket_not_valid(st: Store, payload: cap.Payload) -> Result | None:
+    row = st.fetchone("SELECT status FROM tickets WHERE id = ?", (payload.tid,))
+    if row is None:
+        return Result(Status.INVALID, payload=payload, reason="ticket not issued for this event")
+    status = row["status"] if hasattr(row, "keys") else row[0]
+    if status != "valid":
+        return Result(Status.INVALID, payload=payload, reason="ticket revoked or not valid")
+    return None
 
 
 def _verify_for_event(

@@ -1,4 +1,4 @@
-"""Routes restantes (images, payouts, org bank, sync feed, delete image)."""
+"""Routes restantes (images, payouts, org bank, delete image)."""
 
 from __future__ import annotations
 
@@ -170,44 +170,6 @@ def delete_invite(invite_id: str, state: AppState = Depends(require_user)):
 def list_banks(_state: AppState = Depends(require_user)):
     """List banks."""
     return {"banks": BUILTIN_BANKS}
-
-
-@router.get("/sync/feed")
-def sync_feed_public():
-    """Sync feed public."""
-    return json_error(401, "unauthorized", "peer authentication required")
-
-
-@router.put("/sync/peers/{peer_id}/feed")
-def set_peer_feed(peer_id: str, body: dict, state: AppState = Depends(require_user)):
-    """Set peer feed."""
-    from store import sync_peers
-
-    try:
-        peer = sync_peers.get_sync_peer(state.store, peer_id)
-    except NotFoundError:
-        return json_error(404, "not_found", "peer not found")
-    if not rbac.can_manage_org(state.store, state.current_user.id, peer.org_id, rbac.ROLE_OWNER):
-        return json_error(403, "forbidden", "you are not the owner of this org")
-    sync_peers.set_peer_feed_flags(
-        state.store,
-        peer_id,
-        bool(body.get("feed_subscribe") or body.get("subscribe")),
-        bool(body.get("feed_publish") or body.get("publish")),
-    )
-    return {"ok": True}
-
-
-@router.post("/sync/peers/{peer_id}/feed")
-def pull_peer_feed(peer_id: str, state: AppState = Depends(require_user)):
-    """Pull peer feed."""
-    return {"imported": 0, "peer_id": peer_id}
-
-
-@router.get("/sync/peers/{peer_id}/feed")
-def list_peer_feed_cache(peer_id: str, state: AppState = Depends(require_user)):
-    """List peer feed cache."""
-    return {"events": [], "peer_id": peer_id}
 
 
 @images_router.delete("/images/{image_id}", status_code=204)

@@ -1,0 +1,154 @@
+{
+  "format": "chantier3a-capability-token",
+  "payload_version": 1,
+  "token_prefix": "chantier3a",
+  "field_order": [
+    "v",
+    "tid",
+    "ref",
+    "eid",
+    "tt",
+    "kid",
+    "sub",
+    "nm",
+    "iat",
+    "nbf",
+    "exp",
+    "seat"
+  ],
+  "omit_when_empty": [
+    "seat"
+  ],
+  "error_codes": [
+    "malformed",
+    "unsupported_version",
+    "bad_signature",
+    "not_yet_valid",
+    "expired",
+    "unknown_kid"
+  ],
+  "keys": {
+    "issuer": {
+      "kid": "k_If4x36FUomFia_hUBG_SJw",
+      "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+    },
+    "other": {
+      "kid": "k_OfcT0KZEJT8EUpQhufUbmw",
+      "public_key_b64url": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw",
+      "seed_hex": "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb"
+    },
+    "truncated": {
+      "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg"
+    }
+  },
+  "issue": [
+    {
+      "name": "full payload",
+      "payload": {
+        "tid": "01J8ZK8T0M8N0P0Q0R0S0T0U0V",
+        "ref": "TDEV-2026-0042",
+        "eid": "01J8ZK8T0M8N0P0Q0R0S0T0U0E",
+        "tt": "01J8ZK8T0M8N0P0Q0R0S0T0U0T",
+        "sub": "01J8ZK8T0M8N0P0Q0R0S0T0U0S",
+        "nm": "Ada Lovelace",
+        "iat": 1750000000,
+        "nbf": 1750000000,
+        "exp": 1750086400,
+        "seat": "A14"
+      },
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDQyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxNzUwMDAwMDAwLCJleHAiOjE3NTAwODY0MDAsInNlYXQiOiJBMTQifQ.YIilK-9r1alkLxxc_cp7noapRs76dDOj3ybnYHrc5OcXx7IAvd3qR_m7liCv04PbANdqrm5eZ__71ybu1Db9DQ"
+    },
+    {
+      "name": "unicode and html-significant name",
+      "payload": {
+        "tid": "01J8ZK8T0M8N0P0Q0R0S0T0U2V",
+        "ref": "TDEV-2026-0043",
+        "eid": "01J8ZK8T0M8N0P0Q0R0S0T0U0E",
+        "tt": "01J8ZK8T0M8N0P0Q0R0S0T0U0T",
+        "sub": "01J8ZK8T0M8N0P0Q0R0S0T0U0S",
+        "nm": "Ada & Grace <VIP> — Ünicode 日本",
+        "iat": 1750000000,
+        "nbf": 1750000000,
+        "exp": 1750086400,
+        "seat": "R2/D2"
+      },
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUyViIsInJlZiI6IlRERVYtMjAyNi0wMDQzIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBcdTAwMjYgR3JhY2UgXHUwMDNjVklQXHUwMDNlIOKAlCDDnG5pY29kZSDml6XmnKwiLCJpYXQiOjE3NTAwMDAwMDAsIm5iZiI6MTc1MDAwMDAwMCwiZXhwIjoxNzUwMDg2NDAwLCJzZWF0IjoiUjIvRDIifQ.w_6XdEVVkrgNdCFqISdunMrVgGidOomCDAdVOYgpMhha7qfPZu5sf7zuBFFAjUq_X_YKrti5Pxlv6loIinctBg"
+    }
+  ],
+  "verify": [
+    {
+      "name": "valid token inside its window",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDQyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxNzUwMDAwMDAwLCJleHAiOjE3NTAwODY0MDAsInNlYXQiOiJBMTQifQ.YIilK-9r1alkLxxc_cp7noapRs76dDOj3ybnYHrc5OcXx7IAvd3qR_m7liCv04PbANdqrm5eZ__71ybu1Db9DQ",
+      "key": "issuer",
+      "now_unix": 1750000001,
+      "result": "ok",
+      "tid": "01J8ZK8T0M8N0P0Q0R0S0T0U0V",
+      "ref": "TDEV-2026-0042"
+    },
+    {
+      "name": "valid token at exactly nbf",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDk5IiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxMDAwLCJleHAiOjIwMDAsInNlYXQiOiJBMTQifQ.PU9LLcWJkVfsdIg0p87XDSRs1R53YnP9uUBwfDmMUCyPHlJAfCoh5JNh7Ub1Hctz_o4k6cGpMt_MQdwt1uRxAw",
+      "key": "issuer",
+      "now_unix": 1000,
+      "result": "ok",
+      "tid": "01J8ZK8T0M8N0P0Q0R0S0T0U0V"
+    },
+    {
+      "name": "one second before nbf",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDk5IiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxMDAwLCJleHAiOjIwMDAsInNlYXQiOiJBMTQifQ.PU9LLcWJkVfsdIg0p87XDSRs1R53YnP9uUBwfDmMUCyPHlJAfCoh5JNh7Ub1Hctz_o4k6cGpMt_MQdwt1uRxAw",
+      "key": "issuer",
+      "now_unix": 999,
+      "result": "error",
+      "error": "not_yet_valid"
+    },
+    {
+      "name": "at exactly exp",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDk5IiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxMDAwLCJleHAiOjIwMDAsInNlYXQiOiJBMTQifQ.PU9LLcWJkVfsdIg0p87XDSRs1R53YnP9uUBwfDmMUCyPHlJAfCoh5JNh7Ub1Hctz_o4k6cGpMt_MQdwt1uRxAw",
+      "key": "issuer",
+      "now_unix": 2000,
+      "result": "error",
+      "error": "expired"
+    },
+    {
+      "name": "one second before exp",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDk5IiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxMDAwLCJleHAiOjIwMDAsInNlYXQiOiJBMTQifQ.PU9LLcWJkVfsdIg0p87XDSRs1R53YnP9uUBwfDmMUCyPHlJAfCoh5JNh7Ub1Hctz_o4k6cGpMt_MQdwt1uRxAw",
+      "key": "issuer",
+      "now_unix": 1999,
+      "result": "ok",
+      "tid": "01J8ZK8T0M8N0P0Q0R0S0T0U0V"
+    },
+    {
+      "name": "missing validity window (legacy shape)",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUxViIsInJlZiI6IlRERVYtMjAyNi0wMDAyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkdyYWNlIEhvcHBlciIsImlhdCI6MTc1MDAwMDAwMH0.AKcX2RUnN18eav5Udd50g0KtJI2XgL3-8jHkIZ2ez8On167pTLGThpCik9IXUT9kvwm3If8SymZqbgSyLdXDBQ",
+      "key": "issuer",
+      "now_unix": 1750000001,
+      "result": "error",
+      "error": "malformed"
+    },
+    {
+      "name": "correct token wrong public key",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDQyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxNzUwMDAwMDAwLCJleHAiOjE3NTAwODY0MDAsInNlYXQiOiJBMTQifQ.YIilK-9r1alkLxxc_cp7noapRs76dDOj3ybnYHrc5OcXx7IAvd3qR_m7liCv04PbANdqrm5eZ__71ybu1Db9DQ",
+      "key": "other",
+      "now_unix": 1750000001,
+      "result": "error",
+      "error": "bad_signature"
+    },
+    {
+      "name": "payload tampered after signing",
+      "token": "chantier3a.eyJ2IjoxLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDQyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxNzUwMDAwMDAwLCJleHAiOjE3NTAwODY0MDAsInNlYXQiOiJaOTkifQ.YIilK-9r1alkLxxc_cp7noapRs76dDOj3ybnYHrc5OcXx7IAvd3qR_m7liCv04PbANdqrm5eZ__71ybu1Db9DQ",
+      "key": "issuer",
+      "now_unix": 1750000001,
+      "result": "error",
+      "error": "bad_signature"
+    },
+    {
+      "name": "unsupported version",
+      "token": "chantier3a.eyJ2IjoyLCJ0aWQiOiIwMUo4Wks4VDBNOE4wUDBRMFIwUzBUMFUwViIsInJlZiI6IlRERVYtMjAyNi0wMDQyIiwiZWlkIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMEUiLCJ0dCI6IjAxSjhaSzhUME04TjBQMFEwUjBTMFQwVTBUIiwia2lkIjoia19JZjR4MzZGVW9tRmlhX2hVQkdfU0p3Iiwic3ViIjoiMDFKOFpLOFQwTThOMFAwUTBSMFMwVDBVMFMiLCJubSI6IkFkYSBMb3ZlbGFjZSIsImlhdCI6MTc1MDAwMDAwMCwibmJmIjoxNzUwMDAwMDAwLCJleHAiOjE3NTAwODY0MDAsInNlYXQiOiJBMTQifQ.Zp18jHiRrnFZJC4DWKDWGpJBs3k2-CRUqgeCvBs_k6uJAo9v8Sooi6UB3ZHngAPv7zWLtmHbibJ0Imehu17wCQ",
+      "key": "issuer",
+      "now_unix": 1750000001,
+      "result": "error",
+      "error": "unsupported_version"
+    }
+  ]
+}

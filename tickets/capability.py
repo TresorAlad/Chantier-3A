@@ -56,6 +56,7 @@ class ErrUnknownKID(CapabilityError):
 class Payload:
     """Payload."""
     tid: str = ""
+    ref: str = ""
     eid: str = ""
     tt: str = ""
     kid: str = ""
@@ -71,17 +72,16 @@ class Payload:
         out: dict = {
             "v": CURRENT_VERSION,
             "tid": self.tid,
+            "ref": self.ref,
             "eid": self.eid,
             "tt": self.tt,
             "kid": self.kid,
             "sub": self.sub,
             "nm": self.name,
             "iat": self.iat,
+            "nbf": self.nbf,
+            "exp": self.exp,
         }
-        if self.nbf:
-            out["nbf"] = self.nbf
-        if self.exp:
-            out["exp"] = self.exp
         if self.seat:
             out["seat"] = self.seat
         return out
@@ -162,7 +162,7 @@ def verify(token: str, pub_raw: bytes, now: datetime) -> Payload:
         raise ErrMalformed(f"payload json: {err}") from err
     if not isinstance(data, dict):
         raise ErrMalformed("payload json: not an object")
-    allowed = {"v", "tid", "eid", "tt", "kid", "sub", "nm", "iat", "nbf", "exp", "seat"}
+    allowed = {"v", "tid", "ref", "eid", "tt", "kid", "sub", "nm", "iat", "nbf", "exp", "seat"}
     if extra := set(data) - allowed:
         raise ErrMalformed(f"payload json: unknown field {sorted(extra)[0]}")
     for num_key in ("v", "iat", "nbf", "exp"):
@@ -172,6 +172,7 @@ def verify(token: str, pub_raw: bytes, now: datetime) -> Payload:
         raise ErrUnsupportedVersion(f"got version {data.get('v')}")
     p = Payload(
         tid=data.get("tid", ""),
+        ref=data.get("ref", "") or "",
         eid=data.get("eid", ""),
         tt=data.get("tt", ""),
         kid=data.get("kid", ""),
@@ -182,6 +183,8 @@ def verify(token: str, pub_raw: bytes, now: datetime) -> Payload:
         exp=int(data.get("exp", 0) or 0),
         seat=data.get("seat", "") or "",
     )
+    if p.nbf <= 0 or p.exp <= 0:
+        raise ErrMalformed("validity window required")
     now_unix = int(now.timestamp())
     if p.nbf and now_unix < p.nbf:
         raise ErrNotYetValid()
@@ -190,14 +193,26 @@ def verify(token: str, pub_raw: bytes, now: datetime) -> Payload:
     return p
 
 
-def peek_kid(token: str) -> str:
-    """Peek kid."""
+def _peek_payload_field(token: str, field: str) -> str:
     parts = token.split(".")
     if len(parts) != 3 or parts[0] != TOKEN_PREFIX:
         raise ErrMalformed("bad token shape")
     body = base64.urlsafe_b64decode(parts[1] + "==")
     data = json.loads(body.decode())
-    return data.get("kid", "")
+    if not isinstance(data, dict):
+        raise ErrMalformed("payload json: not an object")
+    val = data.get(field, "")
+    return val if isinstance(val, str) else str(val)
+
+
+def peek_kid(token: str) -> str:
+    """Peek kid."""
+    return _peek_payload_field(token, "kid")
+
+
+def peek_eid(token: str) -> str:
+    """Peek event id (eid) without verifying the signature."""
+    return _peek_payload_field(token, "eid")
 
 
 def verify_with_ring(token: str, ring: KeyRing, now: datetime) -> Payload:

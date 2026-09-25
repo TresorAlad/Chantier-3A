@@ -93,6 +93,8 @@ async def payment_webhook(
 
 def _order_json(o) -> dict:
     """Internal: order json."""
+    from http_layer.routes.orders import _registration_json
+
     out = {
         "id": o.id,
         "event_id": o.event_id,
@@ -100,6 +102,7 @@ def _order_json(o) -> dict:
         "total_minor": o.total_minor,
         "currency": o.currency,
         "provider": o.provider,
+        "registration": _registration_json(o),
     }
     if o.paid_at:
         out["paid_at"] = o.paid_at.isoformat().replace("+00:00", "Z")

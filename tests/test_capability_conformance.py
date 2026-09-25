@@ -1,4 +1,4 @@
-"""Conformance tests against docs/ticket-format-vectors.json (issue + verify)."""
+"""Conformance tests against docs/pass-format-vectors.json (issue + verify)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from tickets import capability as cap
 
-VECTORS = Path(__file__).resolve().parents[2] / "docs" / "ticket-format-vectors.json"
+VECTORS = Path(__file__).resolve().parents[1] / "docs" / "pass-format-vectors.json"
 
 ERROR_MAP = {
     "malformed": cap.ErrMalformed,
@@ -47,9 +47,10 @@ def test_issue_vectors(vectors):
         raw = vec["payload"]
         payload = cap.Payload(
             tid=raw.get("tid", ""),
+            ref=raw.get("ref", ""),
             eid=raw.get("eid", ""),
             tt=raw.get("tt", ""),
-            kid=raw.get("kid", ""),
+            kid=raw.get("kid") or issuer["kid"],
             sub=raw.get("sub", ""),
             name=raw.get("nm", ""),
             iat=int(raw.get("iat", 0)),

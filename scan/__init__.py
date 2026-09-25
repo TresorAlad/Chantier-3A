@@ -1,2 +1,2 @@
-"""Door scan admission checks and offline bundle assembly."""
+"""Door scan admission checks (online API)."""
 

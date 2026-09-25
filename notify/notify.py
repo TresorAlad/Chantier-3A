@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import smtplib
 import threading
+from urllib.parse import quote
 from email.message import EmailMessage
 
 from config import Config
@@ -43,13 +44,20 @@ class NotifyService:
         if not self._config.smtp_host or not self._config.smtp_from:
             log.info("notify: SMTP not configured; skipping e-mail for order %s", order_id)
             return
+        from store import tickets as tickets_repo
+
         base = self._config.base_url.rstrip("/")
-        # Plain-text template; localize via config/i18n when product copy is finalized.
+        ticket_rows = tickets_repo.list_tickets_for_order(self._store, order_id)
+        pass_lines = ""
+        if ticket_rows:
+            pass_lines = "\n".join(f"- Pass {t.serial}" for t in ticket_rows) + "\n\n"
+        lookup = f"{base}/order/{ord_row.id}?email={quote(ord_row.buyer_email)}\n"
         body = (
             f"Hello {ord_row.buyer_name},\n\n"
             f'Your order for "{ev.title}" is confirmed (ref. {ord_row.id}).\n'
             f"Amount: {ord_row.total_minor} {ord_row.currency}\n\n"
-            f"View your order: {base}/order/{ord_row.id}\n\n"
+            f"{pass_lines}"
+            f"View your order and passes: {lookup}\n\n"
             "Thank you,\nThe ticketing team\n"
         )
         try:

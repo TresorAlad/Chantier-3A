@@ -11,8 +11,8 @@ import uvicorn
 
 from config import load_config
 from http_layer.app import create_app
-from store import open_dual, open_sqlite
-from store.migrate import migrate_postgres, migrate_sqlite
+from store import open_postgres, open_sqlite
+from store.migrate import migrate_store
 
 
 def _setup_logging() -> None:
@@ -31,28 +31,18 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     cfg = load_config(db=args.db or "")
     if env_path:
         print(f"Using environment file: {env_path}")
-    if cfg.database_url:
-        try:
-            versions = migrate_postgres(cfg.database_url)
-        except Exception as err:
-            print(f"billetterie-api migrate: PostgreSQL failed: {err}", file=sys.stderr)
-            return 1
-        try:
-            migrate_sqlite(cfg.db)
-        except Exception as err:
-            print(f"billetterie-api migrate: SQLite mirror failed: {err}", file=sys.stderr)
-            return 1
-        print(f"PostgreSQL (primary): {len(versions)} migration(s) recorded.")
-        if versions:
-            print(f"  latest version: {versions[-1]}")
-        print(f"SQLite (secondary): schema synced at {cfg.db}")
-        return 0
     try:
-        versions = migrate_sqlite(cfg.db)
+        backend, versions = migrate_store(
+            database_url=cfg.database_url,
+            sqlite_path=cfg.db,
+        )
     except Exception as err:
-        print(f"billetterie-api migrate: SQLite failed: {err}", file=sys.stderr)
+        print(f"billetterie-api migrate failed: {err}", file=sys.stderr)
         return 1
-    print(f"SQLite only: {len(versions)} migration(s) applied at {cfg.db}")
+    target = cfg.database_url if backend == "postgresql" else cfg.db
+    print(f"Migrations ({backend}): {len(versions)} version(s) at {target}")
+    if versions:
+        print(f"  latest version: {versions[-1]}")
     return 0
 
 
@@ -93,22 +83,16 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
     os.makedirs(cfg.media_dir, mode=0o700, exist_ok=True)
 
-    if demo:
-        store = open_sqlite(cfg.db)
+    if cfg.database_url:
+        if not cfg.key_passphrase and not demo:
+            print(
+                "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",
+                file=sys.stderr,
+            )
+            return 1
+        store = open_postgres(cfg.database_url)
     else:
-        if not cfg.database_url:
-            print(
-                "billetterie-api: CHANTIER3A_DATABASE_URL is required. For SQLite local, use: billetterie-api serve --demo",
-                file=sys.stderr,
-            )
-            return 1
-        if not cfg.key_passphrase:
-            print(
-                "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required for production (signing keys).",
-                file=sys.stderr,
-            )
-            return 1
-        store = open_dual(cfg.database_url, cfg.db)
+        store = open_sqlite(cfg.db)
 
     app = create_app(store, cfg)
     host, port = _parse_addr(cfg.addr)

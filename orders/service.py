@@ -14,6 +14,7 @@ from store import (
     events_repo,
     order_items as order_items_repo,
     orders as orders_repo,
+    pass_serial,
     ticket_types as tt_repo,
     tickets as tickets_repo,
 )
@@ -278,44 +279,57 @@ class OrdersService:
             raise ErrOrderNotSettleable
         items = order_items_repo.list_order_items_for_order(self._store, ord_row.id)
         paid_at = result.paid_at or datetime.now(timezone.utc)
-        to_insert: list[tickets_repo.Ticket] = []
-        for item in items:
-            tt = tt_repo.get_ticket_type_by_id(self._store, item.ticket_type_id)
-            kind = tt.product_kind or tt_repo.PRODUCT_KIND_TICKET
-            if kind != tt_repo.PRODUCT_KIND_TICKET:
-                continue
-            for _ in range(item.quantity):
-                tid = new_ulid()
-                payload = cap.Payload(
-                    tid=tid,
-                    eid=ord_row.event_id,
-                    tt=item.ticket_type_id,
-                    sub=ord_row.user_id or "",
-                    name=ord_row.buyer_name,
-                    iat=int(paid_at.timestamp()),
-                )
-                token, _ = issue_mod.issue_ticket(self._store, ord_row.event_id, payload)
-                to_insert.append(
-                    tickets_repo.Ticket(
-                        id=tid,
-                        order_id=ord_row.id,
-                        event_id=ord_row.event_id,
-                        ticket_type_id=item.ticket_type_id,
-                        holder_user_id=ord_row.user_id,
-                        holder_name=ord_row.buyer_name,
-                        serial=tid,
-                        capability=token,
-                        status="valid",
-                        issued_at=paid_at,
+        ev = events_repo.get_event_by_id(self._store, ord_row.event_id)
+        nbf = int(ev.starts_at.timestamp())
+        exp = int(ev.ends_at.timestamp())
+        ref_year = paid_at.year
+
+        def mint(conn) -> list[tickets_repo.Ticket]:
+            out: list[tickets_repo.Ticket] = []
+            for item in items:
+                tt = tt_repo.get_ticket_type_by_id(self._store, item.ticket_type_id)
+                kind = tt.product_kind or tt_repo.PRODUCT_KIND_TICKET
+                if kind != tt_repo.PRODUCT_KIND_TICKET:
+                    continue
+                for _ in range(item.quantity):
+                    ref = pass_serial.next_pass_ref(self._store, conn, ref_year)
+                    tid = new_ulid()
+                    payload = cap.Payload(
+                        tid=tid,
+                        ref=ref,
+                        eid=ord_row.event_id,
+                        tt=item.ticket_type_id,
+                        sub=ord_row.user_id or "",
+                        name=ord_row.buyer_name,
+                        iat=int(paid_at.timestamp()),
+                        nbf=nbf,
+                        exp=exp,
                     )
-                )
-        settled = orders_repo.settle_order(self._store, ord_row.id, paid_at, to_insert)
+                    token, _ = issue_mod.issue_ticket(self._store, ord_row.event_id, payload)
+                    out.append(
+                        tickets_repo.Ticket(
+                            id=tid,
+                            order_id=ord_row.id,
+                            event_id=ord_row.event_id,
+                            ticket_type_id=item.ticket_type_id,
+                            holder_user_id=ord_row.user_id,
+                            holder_name=ord_row.buyer_name,
+                            serial=ref,
+                            capability=token,
+                            status="valid",
+                            issued_at=paid_at,
+                        )
+                    )
+            return out
+
+        settled = orders_repo.settle_order(self._store, ord_row.id, paid_at, mint=mint)
         if not settled:
             fresh = orders_repo.get_order_by_id(self._store, ord_row.id)
             return self._already_settled(fresh)
         fresh = orders_repo.get_order_by_id(self._store, ord_row.id)
         view = self._to_view(fresh, None)
-        tickets = [self._ticket_view(t) for t in to_insert]
+        minted = tickets_repo.list_tickets_for_order(self._store, ord_row.id)
+        tickets = [self._ticket_view(t) for t in minted]
         if self._notify:
             self._notify.on_order_paid(ord_row.id)
         return view, tickets
