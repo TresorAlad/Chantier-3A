@@ -13,6 +13,7 @@ from store import events_repo, orgs, ticket_types as tt_repo
 from store.events_repo import EventRow
 from store.store import new_ulid
 from store.timeutil import time_to_text
+from events import passes as pass_catalog
 from tickets import capability as cap
 
 
@@ -91,6 +92,8 @@ def ticket_type_to_json(tt: tt_repo.TicketType) -> dict:
         "sort_order": tt.sort_order,
         "product_kind": tt.product_kind,
     }
+    if tt.pass_tier:
+        out["pass_tier"] = tt.pass_tier
     if tt.sales_start:
         out["sales_start"] = tt.sales_start.isoformat().replace("+00:00", "Z")
     if tt.sales_end:
@@ -142,7 +145,7 @@ def host_scope(st: Store, cfg: Config) -> tuple[HostScope, list[dict], list[str]
             try:
                 org = orgs.get_org_by_id(st, ref)
             except NotFoundError:
-                raise RuntimeError("CACKLE_HOST_ORG names no organisation on this host")
+                raise RuntimeError("CHANTIER3A_HOST_ORG names no organisation on this host")
         views = [{"id": org.id, "name": org.name, "slug": org.slug}]
         return scope, views, [org.id]
 
@@ -345,16 +348,35 @@ def list_ticket_types(st: Store, event_id: str) -> list[dict]:
     return [ticket_type_to_json(t) for t in tt_repo.list_ticket_types_for_event(st, event_id)]
 
 
-def _validate_ticket_type_input(body: dict) -> None:
+def _validate_ticket_type_input(body: dict, *, existing: tt_repo.TicketType | None = None) -> None:
     """Internal: validate ticket type input."""
-    if not str(body.get("name") or "").strip():
+    if existing is None and not str(body.get("name") or "").strip():
         raise InvalidInput("name is required")
-    if int(body.get("price_minor", 0)) < 0:
+    if "name" in body and not str(body.get("name") or "").strip():
+        raise InvalidInput("name is required")
+    default_price = existing.price_minor if existing else 0
+    price = int(body.get("price_minor", default_price))
+    if price < 0:
         raise InvalidInput("price_minor cannot be negative")
-    if int(body.get("quantity_total", 0)) < 0:
+    qty_default = existing.quantity_total if existing else 0
+    if int(body.get("quantity_total", qty_default)) < 0:
         raise InvalidInput("quantity_total cannot be negative")
-    if int(body.get("max_per_order", 0)) < 0:
+    max_default = existing.max_per_order if existing else 0
+    if int(body.get("max_per_order", max_default)) < 0:
         raise InvalidInput("max_per_order cannot be negative")
+    if "pass_tier" in body:
+        tier = pass_catalog.normalize_pass_tier(body.get("pass_tier"))
+    elif existing is not None:
+        tier = existing.pass_tier
+    else:
+        tier = pass_catalog.normalize_pass_tier(body.get("pass_tier"))
+    if tier is not None:
+        if tier not in pass_catalog.ALL_PASS_TIERS:
+            raise InvalidInput("pass_tier must be student, standard, or vip")
+        if tier not in pass_catalog.ENABLED_PASS_TIERS:
+            raise InvalidInput("this pass tier is not available yet")
+        if tier == pass_catalog.PASS_TIER_STUDENT and price != 0:
+            raise InvalidInput("student pass must be free (price_minor 0)")
 
 
 def create_ticket_type(st: Store, event_id: str, body: dict) -> dict:
@@ -376,6 +398,7 @@ def create_ticket_type(st: Store, event_id: str, body: dict) -> dict:
         sort_order=int(body.get("sort_order", 0)),
         product_kind=(body.get("product_kind") or tt_repo.PRODUCT_KIND_TICKET).strip()
         or tt_repo.PRODUCT_KIND_TICKET,
+        pass_tier=pass_catalog.normalize_pass_tier(body.get("pass_tier")),
     )
     tt_repo.create_ticket_type(st, tt)
     return ticket_type_to_json(tt)
@@ -383,8 +406,8 @@ def create_ticket_type(st: Store, event_id: str, body: dict) -> dict:
 
 def update_ticket_type(st: Store, tt_id: str, body: dict) -> dict:
     """Update ticket type."""
-    _validate_ticket_type_input(body)
     existing = tt_repo.get_ticket_type_by_id(st, tt_id)
+    _validate_ticket_type_input(body, existing=existing)
     qty = int(body.get("quantity_total", existing.quantity_total))
     if qty < existing.quantity_sold:
         raise QuantityBelowSold(f"{qty} < {existing.quantity_sold} already sold")
@@ -402,6 +425,11 @@ def update_ticket_type(st: Store, tt_id: str, body: dict) -> dict:
         status=(body.get("status") or existing.status).strip() or "active",
         sort_order=int(body.get("sort_order", existing.sort_order)),
         product_kind=(body.get("product_kind") or existing.product_kind).strip() or existing.product_kind,
+        pass_tier=(
+            pass_catalog.normalize_pass_tier(body["pass_tier"])
+            if "pass_tier" in body
+            else existing.pass_tier
+        ),
     )
     tt_repo.update_ticket_type(st, tt)
     return ticket_type_to_json(tt)

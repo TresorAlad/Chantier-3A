@@ -1,0 +1,21 @@
+-- An index that makes the peer feed's page cursor an actual seek.
+--
+-- Migration 0007 added the opt-in event feed. It served one answer of at most
+-- 200 listings and reported `complete:false` when there were more — honest, but
+-- unreachable: a host with 201 published events could not be mirrored by a peer
+-- at all. The feed now pages, and a page is
+--
+--   WHERE org_id = ? AND status = 'published' AND id > ?  ORDER BY id  LIMIT ?
+--
+-- With only idx_events_org_id to work from, SQLite reads every event the
+-- organisation has ever had, filters, and SORTS — once per page. Walking an
+-- organisation with n published events would then cost O(n²/200) rows read, and
+-- the cost would fall on a route an authenticated peer can call. This index turns
+-- each page into a range scan positioned directly at the cursor: the leading
+-- columns satisfy the two equalities, and `id` supplies both the `>` and the
+-- ORDER BY, so no sort step remains.
+--
+-- It is an index and nothing else. No column changes, no data changes, and
+-- nothing here alters what a peer is allowed to see: `status = 'published'` is
+-- still the whole authorisation, and it still lives in the query.
+CREATE INDEX idx_events_org_status_id ON events(org_id, status, id);

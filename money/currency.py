@@ -1,7 +1,7 @@
 """
 ISO 4217 currency table (ported from backend/internal/money/currency.go).
 
-Amounts elsewhere in Cackle are stored as integer minor units; the exponent here
+Amounts in this API are stored as integer minor units; the exponent here
 is the number of decimal places for that currency (e.g. 2 for EUR, 0 for XOF).
 """
 
@@ -179,6 +179,22 @@ def normalize(code: str) -> str:
     if c not in CURRENCY_DEFS:
         raise ErrUnknownCurrency("unknown currency code")
     return c
+
+def minor_unit_exponent(code: str) -> int:
+    """Decimal places for amounts stored in minor units (0 for XOF/XAF FCFA)."""
+    c = normalize(code)
+    return CURRENCY_DEFS[c][0]
+
+
+def format_minor_amount(amount_minor: int, code: str) -> str:
+    """Human-readable amount from stored minor units."""
+    c = normalize(code)
+    exp = CURRENCY_DEFS[c][0]
+    if exp == 0:
+        return f"{amount_minor} {c}"
+    major = amount_minor / (10**exp)
+    return f"{major:.{exp}f} {c}"
+
 
 def list_currencies() -> list[dict]:
     """Sorted catalog for GET /api/meta/currencies and org/event forms."""

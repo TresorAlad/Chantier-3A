@@ -28,6 +28,11 @@ class Order:
     provider_ref: str | None
     created_at: datetime
     paid_at: datetime | None
+    buyer_first_name: str = ""
+    buyer_last_name: str = ""
+    school_name: str = ""
+    motivation: str = ""
+    wish: str = ""
 
 
 @dataclass
@@ -47,6 +52,11 @@ def _scan_order(row) -> Order:
             user_id=row["user_id"],
             buyer_email=row["buyer_email"],
             buyer_name=row["buyer_name"],
+            buyer_first_name=row["buyer_first_name"] or "",
+            buyer_last_name=row["buyer_last_name"] or "",
+            school_name=row["school_name"] or "",
+            motivation=row["motivation"] or "",
+            wish=row["wish"] or "",
             status=row["status"],
             subtotal_minor=int(row["subtotal_minor"]),
             fee_minor=int(row["fee_minor"]),
@@ -63,25 +73,36 @@ def _scan_order(row) -> Order:
         user_id=row[2],
         buyer_email=row[3],
         buyer_name=row[4],
-        status=row[5],
-        subtotal_minor=int(row[6]),
-        fee_minor=int(row[7]),
-        total_minor=int(row[8]),
-        currency=row[9],
-        provider=row[10],
-        provider_ref=row[11],
-        created_at=text_to_time(row[12]),
-        paid_at=text_to_null_time(row[13]),
+        buyer_first_name=row[5] or "",
+        buyer_last_name=row[6] or "",
+        school_name=row[7] or "",
+        motivation=row[8] or "",
+        wish=row[9] or "",
+        status=row[10],
+        subtotal_minor=int(row[11]),
+        fee_minor=int(row[12]),
+        total_minor=int(row[13]),
+        currency=row[14],
+        provider=row[15],
+        provider_ref=row[16],
+        created_at=text_to_time(row[17]),
+        paid_at=text_to_null_time(row[18]),
     )
+
+
+_ORDER_SELECT = """
+        SELECT id, event_id, user_id, buyer_email, buyer_name,
+               buyer_first_name, buyer_last_name, school_name, motivation, wish,
+               status, subtotal_minor, fee_minor, total_minor, currency, provider,
+               provider_ref, created_at, paid_at
+"""
 
 
 def get_order_by_id(st: Store, order_id: str) -> Order:
     """Get order by id."""
     row = st.fetchone(
-        """
-        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
-               subtotal_minor, fee_minor, total_minor, currency, provider,
-               provider_ref, created_at, paid_at
+        f"""
+        {_ORDER_SELECT}
         FROM orders WHERE id = ?
         """,
         (order_id,),
@@ -94,10 +115,8 @@ def get_order_by_id(st: Store, order_id: str) -> Order:
 def list_orders_for_user(st: Store, user_id: str) -> list[Order]:
     """List orders for user."""
     rows = st.fetchall(
-        """
-        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
-               subtotal_minor, fee_minor, total_minor, currency, provider,
-               provider_ref, created_at, paid_at
+        f"""
+        {_ORDER_SELECT}
         FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC
         """,
         (user_id,),
@@ -108,10 +127,8 @@ def list_orders_for_user(st: Store, user_id: str) -> list[Order]:
 def list_orders_for_event(st: Store, event_id: str) -> list[Order]:
     """List orders for event."""
     rows = st.fetchall(
-        """
-        SELECT id, event_id, user_id, buyer_email, buyer_name, status,
-               subtotal_minor, fee_minor, total_minor, currency, provider,
-               provider_ref, created_at, paid_at
+        f"""
+        {_ORDER_SELECT}
         FROM orders WHERE event_id = ? ORDER BY created_at DESC, id DESC
         """,
         (event_id,),
@@ -183,10 +200,11 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
         st,
         conn,
         """
-        INSERT INTO orders (id, event_id, user_id, buyer_email, buyer_name, status,
-            subtotal_minor, fee_minor, total_minor, currency, provider, provider_ref,
+        INSERT INTO orders (id, event_id, user_id, buyer_email, buyer_name,
+            buyer_first_name, buyer_last_name, school_name, motivation, wish,
+            status, subtotal_minor, fee_minor, total_minor, currency, provider, provider_ref,
             created_at, paid_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             order.id,
@@ -194,6 +212,11 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
             order.user_id,
             order.buyer_email,
             order.buyer_name,
+            order.buyer_first_name,
+            order.buyer_last_name,
+            order.school_name,
+            order.motivation,
+            order.wish,
             order.status,
             order.subtotal_minor,
             order.fee_minor,

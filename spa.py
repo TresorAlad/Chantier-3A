@@ -9,9 +9,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from http_layer.errors import error_body
-from store.paths import REPO_ROOT
+from store.paths import FRONTEND_DIST
 
-DIST = REPO_ROOT / "frontend" / "dist"
+DIST = FRONTEND_DIST
 
 
 def mount_spa(app: FastAPI) -> None:

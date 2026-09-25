@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from config import Config
 from notify.notify import NotifyService
 from orders.service import OrdersService
+from payments.free import FreeProvider
 from payments.manual import ManualProvider
 from payments.registry import Registry
 from payments.remote import RemotePaymentProvider
@@ -54,9 +55,10 @@ def unlock_store_vault(store: Store, config: Config) -> None:
 
 def build_payment_registry(store: Store, config: Config) -> Registry:
     """Register manual, demo stub, and remote payment providers from config."""
-    reg = Registry.from_env(os.environ.get("CACKLE_PAYMENT_PROVIDERS", ""))
+    reg = Registry.from_env(os.environ.get("CHANTIER3A_PAYMENT_PROVIDERS", ""))
     manual = ManualProvider(store=store)
     reg.register(manual)
+    reg.register(FreeProvider())
     if config.demo:
         reg.register(StubProvider(opt_in=True))
     if config.payment_service_url:

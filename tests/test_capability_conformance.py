@@ -27,7 +27,7 @@ ERROR_MAP = {
 def vectors():
     """Vectors."""
     data = json.loads(VECTORS.read_text(encoding="utf-8"))
-    assert data["format"] == "cackle-capability-token"
+    assert data["format"] == "chantier3a-capability-token"
     assert data["payload_version"] == cap.CURRENT_VERSION
     return data
 

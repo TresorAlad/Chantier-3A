@@ -24,9 +24,9 @@ KDF_HKDF = "hkdf-sha256"
 MIN_PASSPHRASE_RUNES = 12
 KEY_LEN = 32
 SALT_LEN = 16
-DEK_AAD = b"cackle.keyvault.dek.v1"
-HKDF_INFO = b"cackle.keyvault.kek.v1"
-DEMO_MATERIAL = b"cackle-demo-vault-not-secret-v1"
+DEK_AAD = b"chantier3a.keyvault.dek.v1"
+HKDF_INFO = b"chantier3a.keyvault.kek.v1"
+DEMO_MATERIAL = b"chantier3a-demo-vault-not-secret-v1"
 
 
 class KeyVaultError(Exception):
@@ -184,4 +184,4 @@ class Vault:
 
 def event_key_aad(key_id: str, event_id: str) -> bytes:
     """Event key aad."""
-    return f"cackle.event_key.v1|{key_id}|{event_id}".encode()
+    return f"chantier3a.event_key.v1|{key_id}|{event_id}".encode()

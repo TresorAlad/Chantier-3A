@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 
 from fastapi import Request, Response
 
-SESSION_COOKIE = "cackle_session"
-CSRF_COOKIE = "cackle_csrf"
+SESSION_COOKIE = "chantier3a_session"
+CSRF_COOKIE = "chantier3a_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 
 

@@ -1,7 +1,7 @@
-# Backend Python (billetterie)
+# Chantier 3A - Backend billetterie (Python)
 
-API FastAPI pour la billetterie. Schéma SQL versionné :
-`../backend/internal/store/migrations`.
+API FastAPI pour la billetterie Chantier 3A. Schéma SQL versionné dans `migrations/`
+(copie de `../backend/internal/store/migrations` ; repli monorepo si absent).
 
 **Convention code :** docstrings et commentaires en anglais. Ce README est en français.
 
@@ -39,19 +39,19 @@ cp .env.example .env
 
 | Variable | Obligatoire | Rôle |
 |----------|-------------|------|
-| `CACKLE_DATABASE_URL` | Oui (sauf démo SQLite seul) | URL PostgreSQL (`postgresql://user:pass@host:5432/db?sslmode=require`) |
-| `CACKLE_DB` | Recommandé | Fichier SQLite local (miroir + secrets session) |
-| `CACKLE_KEY_PASSPHRASE` | Oui en prod | Passphrase du coffre de clés (signature billets) |
-| `CACKLE_BASE_URL` | Recommandé | URL publique (`http://localhost:8080`) |
+| `CHANTIER3A_DATABASE_URL` | Oui (sauf démo SQLite seul) | URL PostgreSQL (`postgresql://user:pass@host:5432/db?sslmode=require`) |
+| `CHANTIER3A_DB` | Recommandé | Fichier SQLite local (miroir + secrets session) |
+| `CHANTIER3A_KEY_PASSPHRASE` | Oui en prod | Passphrase du coffre de clés (signature billets) |
+| `CHANTIER3A_BASE_URL` | Recommandé | URL publique (`http://localhost:8080`) |
 
 Exemple PostgreSQL (Neon, Supabase, etc.) :
 
 ```env
-CACKLE_DATABASE_URL=postgresql://USER:PASSWORD@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-CACKLE_DB=./data/billetterie-local.db
-CACKLE_KEY_PASSPHRASE=changez-moi-minimum-12-caracteres
-CACKLE_BASE_URL=http://localhost:8080
-CACKLE_ADDR=:8080
+CHANTIER3A_DATABASE_URL=postgresql://USER:PASSWORD@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+CHANTIER3A_DB=./data/billetterie-local.db
+CHANTIER3A_KEY_PASSPHRASE=changez-moi-minimum-12-caracteres
+CHANTIER3A_BASE_URL=http://localhost:8080
+CHANTIER3A_ADDR=:8080
 ```
 
 Le CLI charge automatiquement `backend-python/.env` (`python-dotenv`).
@@ -71,8 +71,8 @@ billetterie-api migrate
 
 | Configuration | Action |
 |---------------|--------|
-| `CACKLE_DATABASE_URL` défini | Migrations sur **PostgreSQL** (source de vérité) + sync schéma sur **SQLite** (`CACKLE_DB`) |
-| Pas de `CACKLE_DATABASE_URL` | Migrations **SQLite uniquement** sur `CACKLE_DB` (défaut `./cackle.db`) |
+| `CHANTIER3A_DATABASE_URL` défini | Migrations sur **PostgreSQL** (source de vérité) + sync schéma sur **SQLite** (`CHANTIER3A_DB`) |
+| Pas de `CHANTIER3A_DATABASE_URL` | Migrations **SQLite uniquement** sur `CHANTIER3A_DB` (défaut `./billetterie.db`) |
 
 Sortie attendue (PostgreSQL) :
 
@@ -85,8 +85,8 @@ SQLite (secondary): schema synced at ./data/billetterie-local.db
 
 Fichiers SQL lus depuis :
 
-- PostgreSQL : `../backend/internal/store/migrations/postgres/*.sql`
-- SQLite : `../backend/internal/store/migrations/*.sql`
+- PostgreSQL : `migrations/postgres/*.sql`
+- SQLite : `migrations/*.sql`
 
 Relancer `billetterie-api migrate` est **idempotent** : seules les versions non appliquées sont exécutées.
 
@@ -94,9 +94,9 @@ Relancer `billetterie-api migrate` est **idempotent** : seules les versions non 
 
 | Problème | Piste |
 |----------|--------|
-| `CACKLE_DATABASE_URL is not set` | Copier `.env.example` vers `.env` ou exporter la variable |
+| `CHANTIER3A_DATABASE_URL is not set` | Copier `.env.example` vers `.env` ou exporter la variable |
 | Connexion PostgreSQL refusée | Vérifier URL, SSL (`sslmode=require`), pare-feu, IP autorisée |
-| `migrations directory missing` | Vérifier que le dossier `../backend/internal/store/migrations` est présent |
+| `migrations directory missing` | Vérifier que le dossier `migrations/` est présent dans le dépôt |
 
 ---
 
@@ -106,7 +106,7 @@ Relancer `billetterie-api migrate` est **idempotent** : seules les versions non 
 billetterie-api serve
 ```
 
-Production / équipe : `CACKLE_DATABASE_URL` + `CACKLE_KEY_PASSPHRASE` requis.
+Production / équipe : `CHANTIER3A_DATABASE_URL` + `CHANTIER3A_KEY_PASSPHRASE` requis.
 
 Démo locale sans PostgreSQL :
 
@@ -123,11 +123,30 @@ billetterie-api reset-password user@example.com
 
 Racine du dépôt : `make run-python` (équivalent `serve --demo`).
 
-Docker : `docker build -f Dockerfile.python -t billetterie-api .`
+## 5. Docker
+
+Un seul `docker-compose.yml`, piloté par le fichier **`.env`** (mêmes variables que le CLI).
+
+```bash
+cp .env.example .env
+# Editer CHANTIER3A_KEY_PASSPHRASE, CHANTIER3A_DATABASE_URL, etc.
+docker compose up --build
+```
+
+Par défaut (`.env.example`) : profil **`local-db`** (`COMPOSE_PROFILES=local-db`) + Postgres dans Compose + `CHANTIER3A_DATABASE_URL=...@db:5432/...`. Migrations au démarrage du conteneur.
+
+| Besoin | `.env` |
+|--------|--------|
+| Postgres fourni par Compose | `COMPOSE_PROFILES=local-db` et URL avec host `db` |
+| Postgres externe (Neon, etc.) | Vider `COMPOSE_PROFILES`, URL distante dans `CHANTIER3A_DATABASE_URL` |
+| Démo SQLite dans Docker | `CHANTIER3A_DEMO=1`, `CHANTIER3A_DATABASE_URL` vide, sans `local-db` |
+| Image avec UI React (monorepo) | `CHANTIER3A_DOCKER_BUILD_CONTEXT=..`, `CHANTIER3A_DOCKERFILE=backend-python/Dockerfile`, `CHANTIER3A_DOCKER_TARGET=with-ui` |
+
+Build manuel : `docker build -t billetterie-api .`
 
 ---
 
-## 5. Structure du code
+## 6. Structure du code
 
 ```text
 backend-python/
@@ -150,7 +169,7 @@ Architecture chantier 3A : `../docs/BILLETTERIE-3A-ARCHITECTURE.md`.
 
 ---
 
-## 6. Périmètre API
+## 7. Périmètre API
 
 | Domaine | État |
 |---------|------|

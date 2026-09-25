@@ -1,0 +1,48 @@
+-- Record what the SCANNING DEVICE reported, alongside what the server
+-- concluded, so a cross-gate double-scan stays visible after reconciliation.
+--
+-- Why this is a functional change and not tidying
+-- ───────────────────────────────────────────────
+-- `admissions.result` is the server's CONCLUSION, and it is deliberately
+-- constrained: `idx_admissions_admitted_once` allows exactly one
+-- result='admitted' row per ticket, which is what makes cross-device
+-- reconciliation converge on a single admission no matter how many
+-- partitioned gates each believed they were first.
+--
+-- The cost of that, before this column existed, was that the second gate's
+-- own belief was DISCARDED. `POST /api/scan/sync` rewrote its reported
+-- 'admitted' to 'duplicate' before insert, which made two materially
+-- different events indistinguishable in the stored record:
+--
+--   (a) a gate re-scanning a ticket its OWN local log already had — an
+--       ordinary duplicate, nobody got in twice; and
+--   (b) a gate that was partitioned from the first gate, saw a first scan,
+--       and LET SOMEBODY THROUGH THE DOOR — a real double admission.
+--
+-- Both landed as result='duplicate' with the device's own note. So the one
+-- fact an organiser most needs after an offline event — "these tickets were
+-- admitted at two entrances; that many extra people are inside" — was not
+-- recoverable from the database at all. Reconciliation was happening and the
+-- conflict it resolved was being thrown away.
+--
+-- reported_result is the device's own verdict, stored verbatim and never
+-- rewritten. `result` keeps its exact prior meaning and constraints. A
+-- cross-gate double admission is now precisely the query
+--
+--     GROUP BY ticket_id HAVING COUNT(DISTINCT device_id) > 1
+--     ... WHERE reported_result = 'admitted'
+--
+-- rather than a guess over note text.
+--
+-- Backfill: '' means "this row predates the column, or was written by a path
+-- that had nothing separate to report". It is NOT spelled as a copy of
+-- `result`, because copying would silently claim that every historical
+-- 'duplicate' row was a genuine local duplicate — an assertion this migration
+-- has no evidence for and which would fabricate exactly the distinction the
+-- column exists to record. Readers treat '' as "unknown", and
+-- store.ListAdmissionClaimsForEvent surfaces it as such.
+ALTER TABLE admissions ADD COLUMN reported_result TEXT NOT NULL DEFAULT '';
+
+-- Supports the contested-ticket scan in store.ListAdmissionClaimsForEvent
+-- without a full table scan per event.
+CREATE INDEX idx_admissions_event_reported ON admissions(event_id, reported_result);

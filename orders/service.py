@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from events import issue as issue_mod
+from orders import registration as reg
 from payments import types as pt
 from payments.registry import Registry
 from store import (
@@ -41,6 +42,7 @@ ErrProviderRequired = OrdersError("orders: a payment provider must be specified"
 ErrUnknownProvider = OrdersError("orders: unknown payment provider")
 ErrOrderNotSettleable = OrdersError("orders: order cannot be settled from its current status")
 ErrOrderNotPending = OrdersError("orders: order is not pending")
+ErrRegistrationIncomplete = OrdersError("orders: incomplete pass registration")
 
 
 @dataclass
@@ -57,6 +59,11 @@ class CreateOrderInput:
     user_id: str = ""
     buyer_email: str = ""
     buyer_name: str = ""
+    buyer_first_name: str = ""
+    buyer_last_name: str = ""
+    school_name: str = ""
+    motivation: str = ""
+    wish: str = ""
     items: list[OrderItemInput] | None = None
     provider: str = ""
     callback_url: str = ""
@@ -70,6 +77,11 @@ class OrderView:
     user_id: str
     buyer_email: str
     buyer_name: str
+    buyer_first_name: str
+    buyer_last_name: str
+    school_name: str
+    motivation: str
+    wish: str
     status: str
     subtotal_minor: int
     fee_minor: int
@@ -120,6 +132,22 @@ class OrdersService:
             raise ErrEventNotPublished
         currency = ev.currency.strip().upper()
         now = datetime.now(timezone.utc)
+        tt_ids = [it.ticket_type_id for it in items]
+        needs_reg = reg.order_needs_pass_registration(self._store, inp.event_id, tt_ids)
+        try:
+            registration = reg.normalize_registration(
+                email=inp.buyer_email,
+                first_name=inp.buyer_first_name,
+                last_name=inp.buyer_last_name,
+                legacy_name=inp.buyer_name,
+                school_name=inp.school_name,
+                motivation=inp.motivation,
+                wish=inp.wish,
+                required=needs_reg,
+            )
+        except reg.RegistrationError as err:
+            raise ErrRegistrationIncomplete from err
+        holder_name = f"{registration.first_name} {registration.last_name}".strip() or inp.buyer_name.strip()
         lines: list[orders_repo.OrderLine] = []
         subtotal = 0
         for item in items:
@@ -145,14 +173,19 @@ class OrdersService:
                     unit_price_minor=unit,
                 )
             )
-        provider = self._resolve_provider(inp.provider)
+        provider = self._resolve_provider(inp.provider, amount_minor=subtotal)
         order_id = new_ulid()
         ord_row = orders_repo.Order(
             id=order_id,
             event_id=inp.event_id,
             user_id=inp.user_id or None,
-            buyer_email=inp.buyer_email,
-            buyer_name=inp.buyer_name,
+            buyer_email=registration.email,
+            buyer_name=holder_name,
+            buyer_first_name=registration.first_name,
+            buyer_last_name=registration.last_name,
+            school_name=registration.school_name,
+            motivation=registration.motivation,
+            wish=registration.wish,
             status="pending",
             subtotal_minor=subtotal,
             fee_minor=0,
@@ -173,8 +206,8 @@ class OrdersService:
             pt.Order(
                 reference=order_id,
                 event_id=inp.event_id,
-                buyer_email=inp.buyer_email,
-                buyer_name=inp.buyer_name,
+                buyer_email=registration.email,
+                buyer_name=holder_name,
                 amount_minor=subtotal,
                 currency=currency,
                 callback_url=inp.callback_url,
@@ -183,8 +216,13 @@ class OrdersService:
         view = self._to_view(ord_row, order_items)
         return view, charge
 
-    def _resolve_provider(self, name: str) -> pt.Provider:
+    def _resolve_provider(self, name: str, *, amount_minor: int) -> pt.Provider:
         """Resolve provider on ``OrdersService``."""
+        if amount_minor == 0:
+            free = self._payments.get(pt.PROVIDER_NAME_FREE)
+            if free is None:
+                raise ErrProviderRequired
+            return free
         if not name:
             names = self._payments.names()
             if len(names) == 0:
@@ -192,10 +230,11 @@ class OrdersService:
             if len(names) == 1:
                 name = names[0]
             else:
-                non_manual = [n for n in names if n != pt.PROVIDER_NAME_MANUAL]
-                if len(non_manual) != 1:
+                builtin = {pt.PROVIDER_NAME_MANUAL, pt.PROVIDER_NAME_FREE}
+                paid = [n for n in names if n not in builtin]
+                if len(paid) != 1:
                     raise ErrProviderRequired
-                name = non_manual[0]
+                name = paid[0]
         p = self._payments.get(name)
         if p is None:
             raise ErrUnknownProvider
@@ -314,6 +353,11 @@ class OrdersService:
             user_id=o.user_id or "",
             buyer_email=o.buyer_email,
             buyer_name=o.buyer_name,
+            buyer_first_name=o.buyer_first_name,
+            buyer_last_name=o.buyer_last_name,
+            school_name=o.school_name,
+            motivation=o.motivation,
+            wish=o.wish,
             status=o.status,
             subtotal_minor=o.subtotal_minor,
             fee_minor=o.fee_minor,

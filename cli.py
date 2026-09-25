@@ -24,7 +24,7 @@ def _setup_logging() -> None:
 
 
 def cmd_migrate(args: argparse.Namespace) -> int:
-    """Apply SQL migrations using CACKLE_* from .env (see README)."""
+    """Apply SQL migrations using CHANTIER3A_* from .env (see README)."""
     from config import load_env_file
 
     env_path = load_env_file()
@@ -98,13 +98,13 @@ def cmd_serve(args: argparse.Namespace) -> int:
     else:
         if not cfg.database_url:
             print(
-                "billetterie-api: CACKLE_DATABASE_URL is required. For SQLite local, use: billetterie-api serve --demo",
+                "billetterie-api: CHANTIER3A_DATABASE_URL is required. For SQLite local, use: billetterie-api serve --demo",
                 file=sys.stderr,
             )
             return 1
         if not cfg.key_passphrase:
             print(
-                "billetterie-api: CACKLE_KEY_PASSPHRASE is required for production (signing keys).",
+                "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required for production (signing keys).",
                 file=sys.stderr,
             )
             return 1
@@ -134,12 +134,12 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_migrate = sub.add_parser("migrate", help="Apply SQL migrations")
-    p_migrate.add_argument("--db", default="", help="SQLite path (CACKLE_DB)")
+    p_migrate.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
 
     p_serve = sub.add_parser("serve", help="Start the HTTP server")
-    p_serve.add_argument("--addr", default="", help="Listen address (CACKLE_ADDR)")
-    p_serve.add_argument("--db", default="", help="SQLite path (CACKLE_DB)")
-    p_serve.add_argument("--base-url", default="", help="Public base URL (CACKLE_BASE_URL)")
+    p_serve.add_argument("--addr", default="", help="Listen address (CHANTIER3A_ADDR)")
+    p_serve.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
+    p_serve.add_argument("--base-url", default="", help="Public base URL (CHANTIER3A_BASE_URL)")
     p_serve.add_argument("--media-dir", default="", help="Media upload directory")
     p_serve.add_argument(
         "--demo",
@@ -149,7 +149,7 @@ def main() -> None:
 
     p_reset = sub.add_parser("reset-password", help="Print a password reset token to stdout")
     p_reset.add_argument("email", help="Account email address")
-    p_reset.add_argument("--db", default="", help="SQLite path (CACKLE_DB)")
+    p_reset.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
 
     args = parser.parse_args()
     if args.command == "migrate":

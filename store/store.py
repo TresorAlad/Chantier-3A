@@ -15,7 +15,7 @@ from store.migrate import migrate_postgres, migrate_sqlite
 from store.rebind import rebind_query
 
 Driver = Literal["sqlite", "postgres"]
-log = logging.getLogger("cackle.store")
+log = logging.getLogger("chantier3a.store")
 
 
 class NotFoundError(Exception):

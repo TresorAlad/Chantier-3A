@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from payments.types import (
+    PROVIDER_NAME_FREE,
     PROVIDER_NAME_MANUAL,
     Capabilities,
     Provider,
@@ -29,6 +30,7 @@ class Registry:
             any_name = True
         if any_name:
             enabled[PROVIDER_NAME_MANUAL] = True
+            enabled[PROVIDER_NAME_FREE] = True
             return cls(enabled=enabled)
         return cls()
 
@@ -46,7 +48,7 @@ class Registry:
 
     def is_enabled(self, name: str) -> bool:
         """Is enabled on ``Registry``."""
-        if name == PROVIDER_NAME_MANUAL:
+        if name in (PROVIDER_NAME_MANUAL, PROVIDER_NAME_FREE):
             return True
         if self._enabled is None:
             return True

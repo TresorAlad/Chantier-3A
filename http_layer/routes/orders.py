@@ -23,9 +23,14 @@ class OrderItemBody(BaseModel):
 
 
 class BuyerBody(BaseModel):
-    """Guest checkout contact details."""
+    """Guest checkout and pass registration (required for student pass)."""
     email: str
+    first_name: str = ""
+    last_name: str = ""
     name: str = ""
+    school_name: str = ""
+    motivation: str = ""
+    wish: str = ""
 
 
 class CreateOrderBody(BaseModel):
@@ -36,6 +41,18 @@ class CreateOrderBody(BaseModel):
     provider: str = ""
 
 
+def _registration_json(o) -> dict:
+    """Internal: pass registration fields for admin review."""
+    return {
+        "first_name": getattr(o, "buyer_first_name", "") or "",
+        "last_name": getattr(o, "buyer_last_name", "") or "",
+        "email": o.buyer_email,
+        "school_name": getattr(o, "school_name", "") or "",
+        "motivation": getattr(o, "motivation", "") or "",
+        "wish": getattr(o, "wish", "") or "",
+    }
+
+
 def _order_json(o) -> dict:
     """Internal: order json."""
     out = {
@@ -44,6 +61,7 @@ def _order_json(o) -> dict:
         "user_id": o.user_id,
         "buyer_email": o.buyer_email,
         "buyer_name": o.buyer_name,
+        "registration": _registration_json(o),
         "status": o.status,
         "subtotal_minor": o.subtotal_minor,
         "fee_minor": o.fee_minor,
@@ -95,6 +113,11 @@ def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)
         event_id=body.event_id,
         buyer_email=body.buyer.email,
         buyer_name=body.buyer.name,
+        buyer_first_name=body.buyer.first_name,
+        buyer_last_name=body.buyer.last_name,
+        school_name=body.buyer.school_name,
+        motivation=body.buyer.motivation,
+        wish=body.buyer.wish,
         items=[OrderItemInput(t.ticket_type_id, t.quantity) for t in body.items],
         provider=body.provider,
     )

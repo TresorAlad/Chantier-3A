@@ -11,7 +11,7 @@ from config import Config
 from store import events_repo, orders as orders_repo
 from store.store import Store
 
-log = logging.getLogger("cackle.notify")
+log = logging.getLogger("chantier3a.notify")
 
 
 class NotifyService:

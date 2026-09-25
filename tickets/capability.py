@@ -1,4 +1,4 @@
-"""Ed25519-signed ticket capability tokens (QR payload); wire format matches Go and docs/TICKET-FORMAT.md."""
+"""Ed25519-signed ticket capability tokens (QR payload) for Chantier 3A billetterie."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 CURRENT_VERSION = 1
-TOKEN_PREFIX = "cackle"
+TOKEN_PREFIX = "chantier3a"
 
 
 class CapabilityError(Exception):

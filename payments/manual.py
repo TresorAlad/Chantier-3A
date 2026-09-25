@@ -183,8 +183,13 @@ class _Rec:
 
 def _default_instructions(order: pt.Order) -> str:
     """Internal: default instructions."""
-    major = order.amount_minor / 100.0
+    from money import currency as money
+
+    try:
+        amount_text = money.format_minor_amount(order.amount_minor, order.currency)
+    except money.CurrencyError:
+        amount_text = f"{order.amount_minor} {order.currency}"
     return (
-        f"Pay {major:.2f} {order.currency}, quoting order reference {order.reference}. "
+        f"Pay {amount_text}, quoting order reference {order.reference}. "
         "Ask the organiser to confirm and mark this order paid once they have received it."
     )

@@ -1,0 +1,50 @@
+# Un seul fichier Compose, configuration via .env (copier .env.example -> .env).
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Compose charge automatiquement .env pour ${VAR} et env_file sur les services.
+
+services:
+  db:
+    image: postgres:16-alpine
+    profiles: [local-db]
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chantier3a}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chantier3a}
+      POSTGRES_DB: ${POSTGRES_DB:-chantier3a}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-chantier3a} -d ${POSTGRES_DB:-chantier3a}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ${CHANTIER3A_DOCKER_BUILD_CONTEXT:-.}
+      dockerfile: ${CHANTIER3A_DOCKERFILE:-Dockerfile}
+      target: ${CHANTIER3A_DOCKER_TARGET:-runtime}
+    env_file: .env
+    ports:
+      - "${CHANTIER3A_HOST_PORT:-8080}:8080"
+    environment:
+      CHANTIER3A_ADDR: ${CHANTIER3A_ADDR:-:8080}
+      CHANTIER3A_DB: /srv/data/billetterie-local.db
+      CHANTIER3A_MEDIA_DIR: /srv/data/media
+    volumes:
+      - api_data:/srv/data
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+volumes:
+  pgdata:
+  api_data:

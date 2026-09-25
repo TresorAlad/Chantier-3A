@@ -35,7 +35,7 @@ from http_layer.session import check_csrf, extract_token
 from spa import mount_spa
 from store import Store
 
-log = logging.getLogger("cackle.http")
+log = logging.getLogger("chantier3a.http")
 
 
 def create_app(
@@ -44,7 +44,7 @@ def create_app(
     services: AppServices | None = None,
 ) -> FastAPI:
     """Create a configured FastAPI application for the given store and services."""
-    app = FastAPI(title="Cackle (Python)", version="0.1.0")
+    app = FastAPI(title="Chantier 3A Billetterie", version="0.1.0")
     app.state.store = store
     app.state.config = config
     app.state.services = services or build_services(store, config)

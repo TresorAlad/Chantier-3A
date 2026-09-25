@@ -1,4 +1,4 @@
-"""HTTP client for the external Cackle payment microservice."""
+"""HTTP client for the external Chantier 3A payment microservice."""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ class RemotePaymentProvider:
 
     def webhook(self, body: bytes, headers: dict[str, str]) -> pt.Result:
         """Parse and authenticate a payment service webhook payload."""
-        sig = headers.get("x-cackle-payment-signature", headers.get("X-Cackle-Payment-Signature", ""))
+        sig = headers.get("x-chantier3a-payment-signature", headers.get("X-Chantier3A-Payment-Signature", ""))
         if not self._verify_signature(body, sig):
             raise ValueError("invalid webhook signature")
         data = json.loads(body.decode())

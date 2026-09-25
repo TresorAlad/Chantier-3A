@@ -39,7 +39,7 @@ def ticket_pdf(ticket_id: str, state: AppState = Depends(get_app_state)):
     except NotFoundError:
         return json_error(404, "not_found", "ticket not found")
     body = (
-        f"Cackle ticket\nSerial: {ticket.serial}\nEvent: {ticket.event_id}\n"
+        f"Chantier 3A ticket\nSerial: {ticket.serial}\nEvent: {ticket.event_id}\n"
         f"Holder: {ticket.holder_name}\n\nCapability (QR):\n{ticket.capability}\n"
     ).encode()
     return Response(content=body, media_type="text/plain; charset=utf-8")

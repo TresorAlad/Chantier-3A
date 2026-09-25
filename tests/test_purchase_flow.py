@@ -108,7 +108,7 @@ def test_remote_purchase_webhook_settle(demo_store, tmp_path):
     wh = tc.post(
         "/api/payments/webhook/community-pay",
         content=webhook_body,
-        headers={"Content-Type": "application/json", "X-Cackle-Payment-Signature": sig},
+        headers={"Content-Type": "application/json", "X-Chantier3A-Payment-Signature": sig},
     )
     assert wh.status_code == 200, wh.text
 

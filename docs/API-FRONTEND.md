@@ -38,11 +38,11 @@ Deux modes compatibles avec le frontend existant :
    Le token est renvoyé dans le corps JSON de `POST /api/auth/signup` et `POST /api/auth/login` (`token`).
 
 2. **Cookies**  
-   - `cackle_session` (HttpOnly)  
-   - `cackle_csrf` (lisible par JS)  
+   - `chantier3a_session` (HttpOnly)  
+   - `chantier3a_csrf` (lisible par JS)  
 
    Pour toute requête **mutante** (`POST`, `PUT`, `PATCH`, `DELETE`) authentifiée **via cookie**, envoyer aussi :  
-   `X-CSRF-Token: <valeur du cookie cackle_csrf>`  
+   `X-CSRF-Token: <valeur du cookie chantier3a_csrf>`  
 
    Si vous utilisez le Bearer, le CSRF n'est pas exigé.
 
@@ -315,11 +315,18 @@ Corps typique :
   "max_per_order": 5,
   "sales_start": null,
   "sales_end": null,
-  "product_kind": "ticket"
+  "product_kind": "ticket",
+  "pass_tier": "student"
 }
 ```
 
+`pass_tier` (optionnel) : `student` (gratuit, `price_minor` 0), `standard` ou `vip` (pas encore activés côté API).
+
 Reponse `201` : `{ "ticket_type": { ... } }`
+
+### GET `/api/pass-tiers`
+
+Catalogue public des passes disponibles à la vente. Pour l'instant : pass étudiant gratuit uniquement.
 
 ### PATCH `/api/ticket-types/{tt_id}`
 
@@ -354,13 +361,26 @@ Corps :
 ```json
 {
   "event_id": "ULID",
-  "items": [ { "ticket_type_id": "ULID", "quantity": 2 } ],
-  "buyer": { "email": "a@b.com", "name": "Nom" },
+  "items": [ { "ticket_type_id": "ULID", "quantity": 1 } ],
+  "buyer": {
+    "email": "a@b.com",
+    "first_name": "Prenom",
+    "last_name": "Nom",
+    "school_name": "Universite / ecole",
+    "motivation": "Pourquoi suivre cette edition",
+    "wish": "Ce que vous attendez de l'evenement"
+  },
   "provider": "manual"
 }
 ```
 
+Pour le **pass etudiant** (`pass_tier: student`), tous les champs `buyer` ci-dessus sont **obligatoires** (sauf `name`, legacy). Les autres types de billets peuvent n'envoyer que `email` et `name`.
+
 `provider` vide = provider par defaut du serveur.
+
+### GET `/api/events/{event_id}/orders` (admin)
+
+Chaque commande inclut un objet **`registration`** avec les reponses du formulaire : `first_name`, `last_name`, `email`, `school_name`, `motivation`, `wish`.
 
 Reponse `201` :
 
@@ -525,9 +545,9 @@ Serveur lance :
 ## Checklist integration frontend
 
 1. Stocker le `token` ou s'appuyer sur cookies ; envoyer `Authorization` sur les appels API si origin separe.
-2. Sur mutations avec cookies : lire `cackle_csrf` et envoyer `X-CSRF-Token`.
+2. Sur mutations avec cookies : lire `chantier3a_csrf` et envoyer `X-CSRF-Token`.
 3. Checkout invite : possible sans etre connecte ; eviter de laisser une session cookie d'un autre compte sans CSRF sur le POST `/api/orders`.
-4. Montants : toujours afficher a partir de `*_minor` et `currency`.
+4. Montants : toujours afficher a partir de `*_minor` et `currency`. FCFA : code ISO `XOF` (Afrique de l'Ouest) ou `XAF` (Afrique centrale), exposant 0 : `price_minor` = francs entiers (ex. 15 000 FCFA -> `15000`, pas de centimes).
 5. Tester le parcours : signup -> org -> event -> ticket-types -> publish -> orders -> mark-paid -> tickets.
 
 Tests automatiques cote backend : `pytest tests/test_api_smoke.py` (dans un venv avec `pip install -e '.[dev]'`).

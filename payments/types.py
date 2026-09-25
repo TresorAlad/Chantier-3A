@@ -101,6 +101,7 @@ class Provider(Protocol):
 
 PROVIDER_NAME_MANUAL = "manual"
 PROVIDER_NAME_STUB = "stub"
+PROVIDER_NAME_FREE = "free"
 
 ErrReferenceMismatch = Exception("payments: reference does not match order")
 ErrAmountMismatch = Exception("payments: settled amount does not match order total")

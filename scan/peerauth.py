@@ -9,15 +9,15 @@ from dataclasses import dataclass, field
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-HEADER_KEY = "X-Cackle-Node"
-HEADER_TIMESTAMP = "X-Cackle-Timestamp"
-HEADER_NONCE = "X-Cackle-Nonce"
-HEADER_SIG = "X-Cackle-Sig"
+HEADER_KEY = "X-Chantier3A-Node"
+HEADER_TIMESTAMP = "X-Chantier3A-Timestamp"
+HEADER_NONCE = "X-Chantier3A-Nonce"
+HEADER_SIG = "X-Chantier3A-Sig"
 
 MAX_CLOCK_SKEW_SEC = 5 * 60
 
-REQUEST_DOMAIN = "cackle-sync-request-v1"
-RESPONSE_DOMAIN = "cackle-sync-response-v1"
+REQUEST_DOMAIN = "chantier3a-sync-request-v1"
+RESPONSE_DOMAIN = "chantier3a-sync-response-v1"
 
 
 class ErrUnsigned(Exception):

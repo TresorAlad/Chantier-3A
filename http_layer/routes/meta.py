@@ -58,3 +58,11 @@ def currencies() -> dict:
     from money import currency as money
 
     return {"currencies": money.list_currencies()}
+
+
+@api_router.get("/pass-tiers")
+def pass_tiers() -> dict:
+    """Festival pass tiers currently offered on the storefront."""
+    from events.passes import pass_tier_catalog
+
+    return {"pass_tiers": pass_tier_catalog()}
