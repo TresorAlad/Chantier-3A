@@ -18,7 +18,7 @@ from orders.service import CreateOrderInput, OrderItemInput
 from payments.remote import RemotePaymentProvider
 from payments.registry import Registry
 from payments.manual import ManualProvider
-from conftest import seed_published_event
+from conftest import TEST_DATABASE_URL, seed_published_event
 
 
 def test_remote_purchase_webhook_settle(demo_store, tmp_path):
@@ -66,7 +66,7 @@ def test_remote_purchase_webhook_settle(demo_store, tmp_path):
             client=client,
         )
     )
-    cfg = load_config(db=str(tmp_path / "test.db"), demo=True)
+    cfg = load_config(database_url=TEST_DATABASE_URL, demo=True)
     cfg.payment_provider_name = "community-pay"
     from notify.notify import NotifyService
     from orders.service import OrdersService

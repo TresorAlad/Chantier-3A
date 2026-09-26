@@ -11,7 +11,7 @@ import uvicorn
 
 from config import load_config
 from http_layer.app import create_app
-from store import open_postgres, open_sqlite
+from store import open_postgres
 from store.migrate import migrate_store
 
 
@@ -23,24 +23,33 @@ def _setup_logging() -> None:
     )
 
 
+def _require_database_url(cfg) -> str:
+    """Internal: require database url."""
+    url = (cfg.database_url or "").strip()
+    if not url:
+        print(
+            "billetterie-api: CHANTIER3A_DATABASE_URL is required (PostgreSQL only).",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    return url
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     """Apply SQL migrations using CHANTIER3A_* from .env (see README)."""
     from config import load_env_file
 
     env_path = load_env_file()
-    cfg = load_config(db=args.db or "")
+    cfg = load_config(database_url=args.database_url or "")
     if env_path:
         print(f"Using environment file: {env_path}")
+    url = _require_database_url(cfg)
     try:
-        backend, versions = migrate_store(
-            database_url=cfg.database_url,
-            sqlite_path=cfg.db,
-        )
+        versions = migrate_store(database_url=url)
     except Exception as err:
         print(f"billetterie-api migrate failed: {err}", file=sys.stderr)
         return 1
-    target = cfg.database_url if backend == "postgresql" else cfg.db
-    print(f"Migrations ({backend}): {len(versions)} version(s) at {target}")
+    print(f"Migrations (postgresql): {len(versions)} version(s) at {url}")
     if versions:
         print(f"  latest version: {versions[-1]}")
     return 0
@@ -50,8 +59,9 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     """Cmd reset password."""
     from auth import service as auth_svc
 
-    cfg = load_config(db=args.db or "", demo=True)
-    store = open_sqlite(cfg.db)
+    cfg = load_config(database_url=args.database_url or "", demo=True)
+    url = _require_database_url(cfg)
+    store = open_postgres(url)
     try:
         token, expires = auth_svc.mint_password_reset_token(store, args.email)
     except auth_svc.InvalidEmail:
@@ -76,23 +86,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
     demo = args.demo
     cfg = load_config(
         addr=args.addr or "",
-        db=args.db or "",
+        database_url=args.database_url or "",
         base_url=args.base_url or "",
         media_dir=args.media_dir or "",
         demo=demo,
     )
     os.makedirs(cfg.media_dir, mode=0o700, exist_ok=True)
+    os.makedirs(cfg.data_dir, mode=0o700, exist_ok=True)
 
-    if cfg.database_url:
-        if not cfg.key_passphrase and not demo:
-            print(
-                "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",
-                file=sys.stderr,
-            )
-            return 1
-        store = open_postgres(cfg.database_url)
-    else:
-        store = open_sqlite(cfg.db)
+    url = _require_database_url(cfg)
+    if not cfg.key_passphrase and not demo:
+        print(
+            "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",
+            file=sys.stderr,
+        )
+        return 1
+    store = open_postgres(url)
 
     app = create_app(store, cfg)
     host, port = _parse_addr(cfg.addr)
@@ -117,23 +126,35 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="billetterie-api", description="Ticketing API backend")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_migrate = sub.add_parser("migrate", help="Apply SQL migrations")
-    p_migrate.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
+    p_migrate = sub.add_parser("migrate", help="Apply SQL migrations (PostgreSQL)")
+    p_migrate.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
 
     p_serve = sub.add_parser("serve", help="Start the HTTP server")
     p_serve.add_argument("--addr", default="", help="Listen address (CHANTIER3A_ADDR)")
-    p_serve.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
+    p_serve.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
     p_serve.add_argument("--base-url", default="", help="Public base URL (CHANTIER3A_BASE_URL)")
     p_serve.add_argument("--media-dir", default="", help="Media upload directory")
     p_serve.add_argument(
         "--demo",
         action="store_true",
-        help="SQLite-only mode with DemoSource keyvault and stub payments",
+        help="Demo keyvault and stub payments (still requires PostgreSQL)",
     )
 
     p_reset = sub.add_parser("reset-password", help="Print a password reset token to stdout")
     p_reset.add_argument("email", help="Account email address")
-    p_reset.add_argument("--db", default="", help="SQLite path (CHANTIER3A_DB)")
+    p_reset.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
 
     args = parser.parse_args()
     if args.command == "migrate":

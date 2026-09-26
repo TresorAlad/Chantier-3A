@@ -1,7 +1,8 @@
-"""Pytest fixtures: in-memory demo store, app, and seeded published events."""
+"""Pytest fixtures: PostgreSQL store, app, and seeded published events."""
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -11,16 +12,39 @@ from bootstrap import build_services
 from config import load_config
 from http_layer.app import create_app
 from store import event_keys as event_keys_repo
-from store.store import new_ulid, open_sqlite
+from store.store import Store, new_ulid, open_postgres
 from store.timeutil import time_to_text
+
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql://chantier3a:chantier3a@127.0.0.1:5432/chantier3a?sslmode=disable",
+)
+
+
+def _truncate_public_tables(store: Store) -> None:
+    """Clear application data between tests (keep schema_migrations)."""
+    rows = store.fetchall(
+        """
+        SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND tablename != 'schema_migrations'
+        """
+    )
+    if not rows:
+        return
+    names = [r["tablename"] if hasattr(r, "keys") else r[0] for r in rows]
+    quoted = ", ".join(f'"{n}"' for n in names)
+    store.execute(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE")
 
 
 @pytest.fixture()
-def demo_store(tmp_path):
+def demo_store():
     """Pytest fixture yielding store, config, services, and FastAPI app (demo mode)."""
-    db_path = str(tmp_path / "test.db")
-    store = open_sqlite(db_path)
-    cfg = load_config(db=db_path, demo=True)
+    try:
+        store = open_postgres(TEST_DATABASE_URL)
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL requis pour les tests ({TEST_DATABASE_URL}): {exc}")
+    _truncate_public_tables(store)
+    cfg = load_config(database_url=TEST_DATABASE_URL, demo=True)
     services = build_services(store, cfg)
     app = create_app(store, cfg, services)
     yield store, cfg, services, app
@@ -29,7 +53,7 @@ def demo_store(tmp_path):
 
 @pytest.fixture()
 def client(demo_store):
-    """FastAPI test client bound to the in-memory demo app."""
+    """FastAPI test client bound to the demo app."""
     _store, _cfg, _services, app = demo_store
     return TestClient(app)
 

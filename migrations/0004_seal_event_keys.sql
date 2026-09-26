@@ -2,7 +2,7 @@
 --
 -- What was wrong
 -- ──────────────
--- `event_keys.private_key` was a PLAINTEXT BLOB in the SQLite file. Every
+-- `event_keys.private_key` was a PLAINTEXT BYTEA in the SQLite file. Every
 -- event's Ed25519 issuer private key sat in the clear, in the one file an
 -- operator is told to back up. Whoever obtained a copy could mint tickets
 -- that verify perfectly for every event in it, forever, and no gate could
@@ -60,13 +60,13 @@ CREATE TABLE key_vault (
     id           TEXT PRIMARY KEY,
     -- The data-encryption key, wrapped under the KEK derived from operator
     -- material. Ciphertext only; the KEK is never stored anywhere.
-    wrapped_key  BLOB NOT NULL,
-    nonce        BLOB NOT NULL,
+    wrapped_key  BYTEA NOT NULL,
+    nonce        BYTEA NOT NULL,
     -- KDF used to turn operator material into the KEK, with its (non-secret)
     -- salt and cost parameters — the same reason a password hash stores its
     -- own salt and cost.
     kdf          TEXT NOT NULL,
-    salt         BLOB NOT NULL,
+    salt         BYTEA NOT NULL,
     argon_time   INTEGER NOT NULL DEFAULT 0,
     argon_memory INTEGER NOT NULL DEFAULT 0,
     argon_lanes  INTEGER NOT NULL DEFAULT 0,
@@ -88,12 +88,12 @@ CREATE TABLE event_keys_sealed (
     -- The public half stays in the clear: it is not secret, it is what gates
     -- pin, and keeping it readable without the vault is what lets a scan
     -- bundle be built by a process that holds no key material at all.
-    public_key         BLOB NOT NULL,
-    sealed_private_key BLOB,
-    sealed_nonce       BLOB,
+    public_key         BYTEA NOT NULL,
+    sealed_private_key BYTEA,
+    sealed_nonce       BYTEA,
     -- Plaintext parked here by this migration, cleared by
     -- store.SealLegacyEventKeys. Always NULL on a fully-migrated database.
-    legacy_private_key BLOB,
+    legacy_private_key BYTEA,
     created_at         TEXT NOT NULL,
     revoked_at         TEXT,
     CHECK (

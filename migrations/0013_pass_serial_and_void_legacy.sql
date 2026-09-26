@@ -6,5 +6,5 @@ CREATE TABLE pass_serial_counters (
 
 UPDATE tickets
 SET status = 'void',
-    voided_at = COALESCE(voided_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    voided_at = COALESCE(voided_at, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
 WHERE status = 'valid';

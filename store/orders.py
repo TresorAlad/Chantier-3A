@@ -140,7 +140,7 @@ def list_orders_for_event(st: Store, event_id: str) -> list[Order]:
 
 def _tx_exec(st: Store, conn, query: str, args: tuple) -> int:
     """Internal: tx exec."""
-    q = rebind_query(query, st.driver)
+    q = rebind_query(query)
     cur = conn.execute(q, args)
     return cur.rowcount
 
@@ -159,16 +159,8 @@ def create_order_with_items(
         order.status = "pending"
 
     conn = st.primary
-    if st.driver == "postgres":
-        with conn.transaction():
-            return _create_order_tx(st, conn, order, lines)
-    try:
-        items = _create_order_tx(st, conn, order, lines)
-        conn.commit()
-        return items
-    except Exception:
-        conn.rollback()
-        raise
+    with conn.transaction():
+        return _create_order_tx(st, conn, order, lines)
 
 
 def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
@@ -189,9 +181,7 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
         )
         if n == 0:
             exists = conn.execute(
-                rebind_query(
-                    "SELECT COUNT(*) FROM ticket_types WHERE id = ?", st.driver
-                ),
+                rebind_query("SELECT COUNT(*) FROM ticket_types WHERE id = ?"),
                 (ln.ticket_type_id,),
             ).fetchone()
             cnt = exists[0] if exists is not None else 0
@@ -259,16 +249,8 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
 def cancel_order_release_inventory(st: Store, order_id: str) -> bool:
     """Cancel order release inventory."""
     conn = st.primary
-    if st.driver == "postgres":
-        with conn.transaction():
-            return _cancel_order_tx(st, conn, order_id)
-    try:
-        ok = _cancel_order_tx(st, conn, order_id)
-        conn.commit()
-        return ok
-    except Exception:
-        conn.rollback()
-        raise
+    with conn.transaction():
+        return _cancel_order_tx(st, conn, order_id)
 
 
 def _cancel_order_tx(st, conn, order_id: str) -> bool:
@@ -281,9 +263,7 @@ def _cancel_order_tx(st, conn, order_id: str) -> bool:
     )
     if n == 0:
         return False
-    q = rebind_query(
-        "SELECT ticket_type_id, quantity FROM order_items WHERE order_id = ?", st.driver
-    )
+    q = rebind_query("SELECT ticket_type_id, quantity FROM order_items WHERE order_id = ?")
     rows = conn.execute(q, (order_id,)).fetchall()
     for row in rows:
         tt_id = row["ticket_type_id"] if hasattr(row, "keys") else row[0]
@@ -307,16 +287,8 @@ def settle_order(
 ) -> bool:
     """Settle order."""
     conn = st.primary
-    if st.driver == "postgres":
-        with conn.transaction():
-            return _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
-    try:
-        ok = _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
-        conn.commit()
-        return ok
-    except Exception:
-        conn.rollback()
-        raise
+    with conn.transaction():
+        return _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
 
 
 def _settle_order_tx(

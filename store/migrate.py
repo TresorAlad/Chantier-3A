@@ -1,15 +1,14 @@
-"""Apply SQL schema migrations for new and existing databases."""
+"""Apply SQL schema migrations for PostgreSQL."""
 
 from __future__ import annotations
 
 import re
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
 
-from store.paths import MIGRATIONS_POSTGRES, MIGRATIONS_SQLITE
+from store.paths import MIGRATIONS_DIR
 
 _VERSION_RE = re.compile(r"^(\d+)_")
 
@@ -30,19 +29,6 @@ def _migration_files(directory: Path) -> list[str]:
     return names
 
 
-def _ensure_schema_migrations_sqlite(conn: sqlite3.Connection) -> None:
-    """Internal: ensure schema migrations sqlite."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            version    INTEGER PRIMARY KEY,
-            name       TEXT NOT NULL,
-            applied_at TEXT NOT NULL
-        )
-        """
-    )
-
-
 def _ensure_schema_migrations_postgres(conn: psycopg.Connection) -> None:
     """Internal: ensure schema migrations postgres."""
     conn.execute(
@@ -61,53 +47,12 @@ def _applied_at() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def migrate_sqlite(path: str) -> list[int]:
-    """Migrate sqlite."""
-    conn = sqlite3.connect(path)
-    try:
-        conn.execute("PRAGMA foreign_keys = ON")
-        _ensure_schema_migrations_sqlite(conn)
-        versions: list[int] = []
-        for name in _migration_files(MIGRATIONS_SQLITE):
-            version = _version_from_name(name)
-            row = conn.execute(
-                "SELECT COUNT(*) FROM schema_migrations WHERE version = ?",
-                (version,),
-            ).fetchone()
-            if row and row[0] > 0:
-                continue
-            sql = (MIGRATIONS_SQLITE / name).read_text(encoding="utf-8")
-            conn.executescript(sql)
-            conn.execute(
-                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-                (version, name, _applied_at()),
-            )
-            conn.commit()
-            versions.append(version)
-        cur = conn.execute("SELECT version FROM schema_migrations ORDER BY version")
-        return [r[0] for r in cur.fetchall()]
-    finally:
-        conn.close()
-
-
-def migrate_store(*, database_url: str, sqlite_path: str) -> tuple[str, list[int]]:
-    """Apply all pending SQL migrations to the database configured in ``.env``.
-
-    If ``database_url`` is set, only PostgreSQL is migrated. Otherwise SQLite at
-    ``sqlite_path`` is migrated. One target per run; no demo/prod split.
-    """
-    url = (database_url or "").strip()
-    if url:
-        return ("postgresql", migrate_postgres(url))
-    return ("sqlite", migrate_sqlite(sqlite_path))
-
-
 def migrate_postgres(database_url: str) -> list[int]:
-    """Migrate postgres."""
+    """Apply pending SQL migrations to PostgreSQL."""
     conn = psycopg.connect(database_url)
     try:
         _ensure_schema_migrations_postgres(conn)
-        for name in _migration_files(MIGRATIONS_POSTGRES):
+        for name in _migration_files(MIGRATIONS_DIR):
             version = _version_from_name(name)
             row = conn.execute(
                 "SELECT COUNT(*) FROM schema_migrations WHERE version = %s",
@@ -115,7 +60,7 @@ def migrate_postgres(database_url: str) -> list[int]:
             ).fetchone()
             if row and row[0] > 0:
                 continue
-            sql = (MIGRATIONS_POSTGRES / name).read_text(encoding="utf-8")
+            sql = (MIGRATIONS_DIR / name).read_text(encoding="utf-8")
             with conn.transaction():
                 conn.execute(sql)
                 conn.execute(
@@ -126,3 +71,11 @@ def migrate_postgres(database_url: str) -> list[int]:
         return [r[0] for r in cur.fetchall()]
     finally:
         conn.close()
+
+
+def migrate_store(*, database_url: str) -> list[int]:
+    """Apply all pending SQL migrations (PostgreSQL only)."""
+    url = (database_url or "").strip()
+    if not url:
+        raise ValueError("CHANTIER3A_DATABASE_URL is required (PostgreSQL only)")
+    return migrate_postgres(url)

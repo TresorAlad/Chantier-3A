@@ -1,7 +1,6 @@
 # Chantier 3A - Backend billetterie (Python)
 
-API FastAPI pour la billetterie Chantier 3A. Schéma SQL versionné dans `migrations/`
-(copie de `../backend/internal/store/migrations` ; repli monorepo si absent).
+API FastAPI pour la billetterie Chantier 3A. Schéma SQL versionné dans `migrations/` (PostgreSQL).
 
 **Convention code :** docstrings et commentaires en anglais. Ce README est en français.
 
@@ -12,7 +11,7 @@ API FastAPI pour la billetterie Chantier 3A. Schéma SQL versionné dans `migrat
 | Outil | Version |
 |-------|---------|
 | Python | 3.11+ |
-| PostgreSQL | 14+ (si `CHANTIER3A_DATABASE_URL`) ou SQLite seul (sans URL) |
+| PostgreSQL | 14+ (`CHANTIER3A_DATABASE_URL` obligatoire) |
 
 ---
 
@@ -39,8 +38,8 @@ cp .env.example .env
 
 | Variable | Obligatoire | Rôle |
 |----------|-------------|------|
-| `CHANTIER3A_DATABASE_URL` | Oui (sauf démo SQLite seul) | URL PostgreSQL (`postgresql://user:pass@host:5432/db?sslmode=require`) |
-| `CHANTIER3A_DB` | Recommandé | Fichier SQLite local (miroir + secrets session) |
+| `CHANTIER3A_DATABASE_URL` | Oui | URL PostgreSQL (`postgresql://user:pass@host:5432/db?sslmode=require`) |
+| `CHANTIER3A_DATA_DIR` | Recommandé | Répertoire local (session, médias ; défaut `./data`) |
 | `CHANTIER3A_KEY_PASSPHRASE` | Oui en prod | Passphrase du coffre de clés (signature billets) |
 | `CHANTIER3A_BASE_URL` | Recommandé | URL publique (`http://localhost:8080`) |
 
@@ -48,7 +47,7 @@ Exemple PostgreSQL (Neon, Supabase, etc.) :
 
 ```env
 CHANTIER3A_DATABASE_URL=postgresql://USER:PASSWORD@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-CHANTIER3A_DB=./data/billetterie-local.db
+CHANTIER3A_DATA_DIR=./data
 CHANTIER3A_KEY_PASSPHRASE=changez-moi-minimum-12-caracteres
 CHANTIER3A_BASE_URL=http://localhost:8080
 CHANTIER3A_ADDR=:8080
@@ -71,12 +70,7 @@ billetterie-api migrate
 
 Le CLI lit `.env` et migre **un seul** moteur :
 
-| `.env` | Base migrée |
-|--------|-------------|
-| `CHANTIER3A_DATABASE_URL` renseigné | PostgreSQL à cette URL (Neon, Compose `db`, etc.) |
-| `CHANTIER3A_DATABASE_URL` vide | Fichier SQLite `CHANTIER3A_DB` (défaut `./billetterie.db`) |
-
-Pas de mode « démo » vs « prod » pour les migrations : c’est **l’URL ou le chemin** que vous mettez dans `.env` qui décide (local ou distant).
+Migrations : **PostgreSQL uniquement**, via `CHANTIER3A_DATABASE_URL` (Neon, Compose `db`, etc.).
 
 Sortie type :
 
@@ -86,7 +80,7 @@ Migrations (postgresql): 13 version(s) at postgresql://...
   latest version: 13
 ```
 
-Les scripts sont numérotés dans `migrations/` (SQLite) et `migrations/postgres/` (dialecte Postgres, même numérotation). L’invalidation des anciens billets fait partie de la migration **0013**, comme les autres évolutions de schéma.
+Les scripts SQL sont dans `migrations/` (numérotés `0001_`, …, jusqu’à **0013**). Les versions déjà appliquées sont suivies dans la table `schema_migrations`.
 
 Relancer `billetterie-api migrate` est **idempotent** : seules les versions non encore appliquées sont exécutées.
 
@@ -94,7 +88,7 @@ Relancer `billetterie-api migrate` est **idempotent** : seules les versions non 
 
 | Problème | Piste |
 |----------|--------|
-| `CHANTIER3A_DATABASE_URL is not set` | Copier `.env.example` vers `.env` ou exporter la variable |
+| `CHANTIER3A_DATABASE_URL is required` | Copier `.env.example` vers `.env` ou exporter la variable |
 | Connexion PostgreSQL refusée | Vérifier URL, SSL (`sslmode=require`), pare-feu, IP autorisée |
 | `migrations directory missing` | Vérifier que le dossier `migrations/` est présent dans le dépôt |
 
@@ -108,14 +102,7 @@ billetterie-api serve
 
 PostgreSQL : renseigner `CHANTIER3A_DATABASE_URL` + `CHANTIER3A_KEY_PASSPHRASE`.
 
-SQLite local : laisser `CHANTIER3A_DATABASE_URL` vide, puis :
-
-```bash
-billetterie-api migrate
-billetterie-api serve
-```
-
-Option `--demo` : coffre de clés et paiements factices (indépendant du choix Postgres vs SQLite).
+Option `--demo` : coffre de clés et paiements factices (PostgreSQL toujours requis).
 
 Autres commandes :
 
@@ -141,7 +128,6 @@ Par défaut (`.env.example`) : profil **`local-db`** (`COMPOSE_PROFILES=local-db
 |--------|--------|
 | Postgres dans Compose | `COMPOSE_PROFILES=local-db`, `CHANTIER3A_DATABASE_URL=...@db:5432/...` |
 | Postgres externe | URL distante dans `CHANTIER3A_DATABASE_URL` (Compose `db` optionnel) |
-| SQLite dans le conteneur | `CHANTIER3A_DATABASE_URL` vide, `CHANTIER3A_DB=/srv/data/...` |
 | Image avec UI React (monorepo) | `CHANTIER3A_DOCKER_BUILD_CONTEXT=..`, `CHANTIER3A_DOCKERFILE=backend-python/Dockerfile`, `CHANTIER3A_DOCKER_TARGET=with-ui` |
 
 Au démarrage, le conteneur exécute `billetterie-api migrate` puis `serve` (désactivable avec `CHANTIER3A_SKIP_MIGRATE=1`).

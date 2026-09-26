@@ -47,7 +47,7 @@
 CREATE TABLE sync_node_identity (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
     public_key  TEXT NOT NULL,   -- Ed25519 public key, lowercase hex
-    private_key BLOB NOT NULL,   -- Ed25519 private key seed+public (64 bytes)
+    private_key BYTEA NOT NULL,   -- Ed25519 private key seed+public (64 bytes)
     created_at  TEXT NOT NULL
 );
 
@@ -138,7 +138,7 @@ CREATE INDEX idx_sync_peer_key ON sync_peer(public_key);
 -- to satisfy referential integrity would throw away the one thing replication
 -- exists to move.
 CREATE TABLE sync_op (
-    seq              INTEGER PRIMARY KEY AUTOINCREMENT,
+    seq              SERIAL PRIMARY KEY,
     op_id            TEXT NOT NULL UNIQUE,
     event_id         TEXT NOT NULL,
     author           TEXT NOT NULL,
@@ -147,7 +147,7 @@ CREATE TABLE sync_op (
     claim_device     TEXT NOT NULL,
     claim_scanned_at TEXT NOT NULL,
     applied          INTEGER NOT NULL DEFAULT 0,
-    cose             BLOB NOT NULL,
+    cose             BYTEA NOT NULL,
     created_at       TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_sync_op_claim
