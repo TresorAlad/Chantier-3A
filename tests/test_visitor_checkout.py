@@ -12,7 +12,7 @@ from store.timeutil import time_to_text
 
 def test_public_signup_disabled_by_default(client: TestClient, monkeypatch):
     monkeypatch.setenv("CHANTIER3A_PUBLIC_SIGNUP", "0")
-    cfg = load_config(db=str(client.app.state.config.db), demo=False)
+    cfg = load_config(database_url=client.app.state.config.database_url, demo=False)
     client.app.state.config = cfg
     r = client.post(
         "/api/auth/signup",
@@ -89,7 +89,7 @@ def test_signup_with_invite_when_public_signup_off(client: TestClient, demo_stor
     h = {"Authorization": f"Bearer {signup.json()['token']}"}
 
     monkeypatch.setenv("CHANTIER3A_PUBLIC_SIGNUP", "0")
-    app.state.config = load_config(db=str(cfg.db), demo=False)
+    app.state.config = load_config(database_url=cfg.database_url, demo=False)
     org = client.post("/api/orgs", json={"name": "Staff Org", "slug": "staff-org"}, headers=h)
     assert org.status_code == 201, org.text
     org_id = org.json()["org"]["id"]

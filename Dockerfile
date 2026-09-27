@@ -26,7 +26,7 @@ USER app
 WORKDIR /srv/data
 
 ENV CHANTIER3A_ADDR=":8080" \
-    CHANTIER3A_DB="/srv/data/billetterie-local.db" \
+    CHANTIER3A_DATA_DIR="/srv/data" \
     CHANTIER3A_MEDIA_DIR="/srv/data/media"
 
 VOLUME ["/srv/data"]

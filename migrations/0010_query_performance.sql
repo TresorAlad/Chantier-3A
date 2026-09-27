@@ -58,3 +58,6 @@ CREATE INDEX IF NOT EXISTS idx_org_invites_org_open
 CREATE INDEX IF NOT EXISTS idx_outbound_emails_pending_created
     ON outbound_emails(created_at ASC)
     WHERE status = 'pending';
+
+-- Refresh planner stats after bulk index creation (PostgreSQL)
+ANALYZE;

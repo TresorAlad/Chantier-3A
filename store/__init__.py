@@ -1,6 +1,5 @@
-"""Database store facade: SQLite/Postgres access and shared errors."""
+"""Database store facade: PostgreSQL access and shared errors."""
 
+from store.store import NotFoundError, Store, open_postgres
 
-from store.store import NotFoundError, Store, open_postgres, open_sqlite
-
-__all__ = ["Store", "NotFoundError", "open_sqlite", "open_postgres"]
+__all__ = ["Store", "NotFoundError", "open_postgres"]

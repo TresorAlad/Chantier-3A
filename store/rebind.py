@@ -1,9 +1,8 @@
 """Rewrite SQL placeholders from ``?`` (Go/sqlx style) to ``%s`` (psycopg)."""
 
-def rebind_query(query: str, driver: str) -> str:
+
+def rebind_query(query: str) -> str:
     """Rebind query."""
-    if driver != "postgres":
-        return query
     out: list[str] = []
     i = 0
     while i < len(query):

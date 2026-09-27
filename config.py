@@ -16,7 +16,7 @@ _ENV_LOADED = False
 HostScope = Literal["own", "single"]
 
 ENV_ADDR = "CHANTIER3A_ADDR"
-ENV_DB = "CHANTIER3A_DB"
+ENV_DATA_DIR = "CHANTIER3A_DATA_DIR"
 ENV_DATABASE_URL = "CHANTIER3A_DATABASE_URL"
 ENV_BASE_URL = "CHANTIER3A_BASE_URL"
 ENV_SESSION_SECRET = "CHANTIER3A_SESSION_SECRET"
@@ -40,7 +40,7 @@ ENV_KEY_PASSPHRASE = "CHANTIER3A_KEY_PASSPHRASE"
 ENV_PUBLIC_SIGNUP = "CHANTIER3A_PUBLIC_SIGNUP"
 
 DEFAULT_ADDR = ":8080"
-DEFAULT_DB = "./billetterie.db"
+DEFAULT_DATA_DIR = "./data"
 DEFAULT_BASE_URL = "http://localhost:8080"
 
 
@@ -48,7 +48,7 @@ DEFAULT_BASE_URL = "http://localhost:8080"
 class Config:
     """Config."""
     addr: str
-    db: str
+    data_dir: str
     database_url: str
     base_url: str
     session_secret: str
@@ -96,16 +96,17 @@ def _truthy(key: str) -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def _session_secret(db_path: str) -> str:
+def _session_secret(data_dir: str) -> str:
     """Internal: session secret."""
     explicit = _env(ENV_SESSION_SECRET)
     if explicit:
         return explicit
-    secret_path = Path(db_path).with_name(".chantier3a_session_secret")
+    base = Path(data_dir).resolve()
+    secret_path = base / ".chantier3a_session_secret"
     if secret_path.is_file():
         return secret_path.read_text(encoding="utf-8").strip()
     material = secrets.token_hex(32)
-    secret_path.parent.mkdir(parents=True, exist_ok=True)
+    base.mkdir(parents=True, exist_ok=True)
     secret_path.write_text(material, encoding="utf-8")
     os.chmod(secret_path, 0o600)
     return material
@@ -114,7 +115,8 @@ def _session_secret(db_path: str) -> str:
 def load_config(
     *,
     addr: str = "",
-    db: str = "",
+    data_dir: str = "",
+    database_url: str = "",
     base_url: str = "",
     media_dir: str = "",
     demo: bool = False,
@@ -122,9 +124,9 @@ def load_config(
     """Build a ``Config`` from environment variables with optional CLI overrides."""
     load_env_file()
     resolved_addr = addr or _env(ENV_ADDR, DEFAULT_ADDR)
-    resolved_db = db or _env(ENV_DB, DEFAULT_DB)
+    resolved_data = data_dir or _env(ENV_DATA_DIR, DEFAULT_DATA_DIR)
     resolved_base = base_url or _env(ENV_BASE_URL, DEFAULT_BASE_URL)
-    database_url = _env(ENV_DATABASE_URL)
+    resolved_db_url = database_url or _env(ENV_DATABASE_URL)
 
     scope = _env(ENV_HOST_SCOPE, "own") or "own"
     if scope not in ("own", "single"):
@@ -139,8 +141,7 @@ def load_config(
 
     md = media_dir or _env(ENV_MEDIA_DIR)
     if not md:
-        db_parent = str(Path(resolved_db).resolve().parent)
-        md = os.path.join(db_parent, "media")
+        md = os.path.join(resolved_data, "media")
 
     pay_timeout = 30
     if pt := _env(ENV_PAYMENT_SERVICE_TIMEOUT):
@@ -151,10 +152,10 @@ def load_config(
 
     return Config(
         addr=resolved_addr,
-        db=resolved_db,
-        database_url=database_url,
+        data_dir=resolved_data,
+        database_url=resolved_db_url,
         base_url=resolved_base,
-        session_secret=_session_secret(resolved_db),
+        session_secret=_session_secret(resolved_data),
         media_dir=md,
         demo=demo,
         host_scope=scope,  # type: ignore[arg-type]

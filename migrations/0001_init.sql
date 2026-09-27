@@ -12,10 +12,8 @@
 --   * IDs are ULID strings (TEXT). Timestamps are RFC-3339 TEXT (see
 --     store.timeToText). Money is always an INTEGER count of minor units in
 --     the row's own currency (never a float) — column suffix `_minor`.
---   * Foreign keys are declared inline; SQLite permits forward references, so
---     the events↔images cover-image cycle needs no follow-up ALTER.
---   * `schema_migrations` is created and maintained by the Go runner
---     (internal/store.Migrate), never here.
+--   * Foreign keys are declared inline (PostgreSQL).
+--   * `schema_migrations` is created and maintained by store/migrate.py, not here.
 
 -- ── Identity & auth ─────────────────────────────────────────────────────────
 
@@ -101,8 +99,8 @@ CREATE TABLE org_bank_accounts (
 
 -- ── Events ──────────────────────────────────────────────────────────────────
 -- events.cover_image_id references images(id); images.event_id references
--- events(id). SQLite resolves these forward references at CREATE time, so the
--- cycle is declared inline with no ALTER.
+-- events(id). PostgreSQL requires images to exist first, so cover_image_id FK
+-- is added via ALTER after CREATE TABLE images.
 
 CREATE TABLE events (
     id             TEXT PRIMARY KEY,
@@ -124,7 +122,7 @@ CREATE TABLE events (
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
     category       TEXT NOT NULL DEFAULT '',
-    cover_image_id TEXT REFERENCES images(id) ON DELETE SET NULL
+    cover_image_id TEXT
 );
 CREATE INDEX idx_events_org_id ON events(org_id);
 CREATE INDEX idx_events_status ON events(status);
@@ -142,11 +140,15 @@ CREATE TABLE images (
 );
 CREATE INDEX idx_images_event_id ON images(event_id);
 
+ALTER TABLE events
+    ADD CONSTRAINT events_cover_image_id_fkey
+    FOREIGN KEY (cover_image_id) REFERENCES images(id) ON DELETE SET NULL;
+
 CREATE TABLE event_keys (
     id          TEXT PRIMARY KEY,
     event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    public_key  BLOB NOT NULL,
-    private_key BLOB NOT NULL,
+    public_key  BYTEA NOT NULL,
+    private_key BYTEA NOT NULL,
     created_at  TEXT NOT NULL,
     revoked_at  TEXT
 );
