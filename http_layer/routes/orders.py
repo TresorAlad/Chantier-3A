@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 
 from auth import rbac
@@ -11,9 +13,46 @@ from http_layer.errors import json_error
 from orders.service import CreateOrderInput, OrderItemInput, OrdersError
 from payments import types as pt
 from payments.manual import ManualProvider
+from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf, render_pass_ticket_png
 from store.store import NotFoundError
 
 router = APIRouter(tags=["orders"])
+
+_FR_WEEKDAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+_FR_MONTHS = (
+    "janv.",
+    "févr.",
+    "mars",
+    "avr.",
+    "mai",
+    "juin",
+    "juil.",
+    "août",
+    "sept.",
+    "oct.",
+    "nov.",
+    "déc.",
+)
+
+
+def _format_when_label(iso: str | None) -> str | None:
+    if not iso:
+        return None
+    try:
+        raw = iso.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        wd = _FR_WEEKDAYS[dt.weekday()]
+        month = _FR_MONTHS[dt.month - 1]
+        hour = dt.strftime("%I:%M %p").lstrip("0").lower()
+        return f"{wd}, {dt.day} {month} | {hour}"
+    except ValueError:
+        return None
+
+
+def _venue_line(venue: str, address: str) -> str:
+    parts = [venue.strip(), address.strip()]
+    joined = ", ".join(p for p in parts if p)
+    return joined or "Lieu à confirmer"
 
 
 class OrderItemBody(BaseModel):
@@ -97,6 +136,42 @@ def _tickets_json(tickets) -> list[dict]:
     ]
 
 
+def _guest_tickets_json(st, order_id: str) -> list[dict]:
+    """Guest-facing tickets with event and pass labels for the mobile billet UI."""
+    from store import events_repo
+    from store import tickets as tickets_repo
+
+    rows = tickets_repo.list_tickets_for_order(st, order_id)
+    if not rows:
+        return []
+    tickets = _tickets_json(rows)
+    event_id = rows[0].event_id
+    event_title = ""
+    event_venue = ""
+    event_starts = ""
+    try:
+        ev = events_repo.get_event_by_id(st, event_id)
+        event_title = ev.title
+        event_venue = ev.venue_name or ""
+        event_starts = ev.starts_at.isoformat().replace("+00:00", "Z")
+    except NotFoundError:
+        pass
+    type_names: dict[str, str] = {}
+    for t in tickets:
+        tt_id = t["ticket_type_id"]
+        if tt_id not in type_names:
+            row = st.fetchone("SELECT name FROM ticket_types WHERE id = ?", (tt_id,))
+            if row is None:
+                type_names[tt_id] = "Pass"
+            else:
+                type_names[tt_id] = row["name"] if hasattr(row, "keys") else row[0]
+        t["event_title"] = event_title
+        t["event_venue_name"] = event_venue
+        t["event_starts_at"] = event_starts
+        t["ticket_type_name"] = type_names[tt_id]
+    return tickets
+
+
 @router.post("/orders", status_code=201)
 def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)):
     """Create order."""
@@ -177,21 +252,138 @@ def get_order_guest(
         return json_error(404, "not_found", "order not found")
     if order.buyer_email.strip().lower() != buyer_email:
         return json_error(404, "not_found", "order not found")
-    from store import tickets as tickets_repo
-
-    tickets = []
-    if order.status == "paid":
-        for t in tickets_repo.list_tickets_for_order(state.store, order_id):
-            tickets.append(
-                {
-                    "id": t.id,
-                    "serial": t.serial,
-                    "capability": t.capability,
-                    "status": t.status,
-                    "ticket_type_id": t.ticket_type_id,
-                }
-            )
+    tickets = _guest_tickets_json(state.store, order_id) if order.status == "paid" else []
     return {"order": _order_json(order), "tickets": tickets}
+
+
+@router.get("/orders/{order_id}/guest/ticket.png")
+def guest_ticket_png(
+    order_id: str,
+    email: str = Query(""),
+    ticket: str = Query(""),
+    state: AppState = Depends(get_app_state),
+):
+    """PNG pass (same asset as e-mail attachment) for guest download."""
+    buyer_email = email.strip().lower()
+    if not buyer_email:
+        return json_error(400, "invalid_request", "email query parameter is required")
+    try:
+        order = state.services.orders.get(order_id)
+    except NotFoundError:
+        return json_error(404, "not_found", "order not found")
+    if order.buyer_email.strip().lower() != buyer_email:
+        return json_error(404, "not_found", "order not found")
+    if order.status != "paid":
+        return json_error(400, "invalid_request", "ticket not available until order is paid")
+    tickets = _guest_tickets_json(state.store, order_id)
+    if not tickets:
+        return json_error(404, "not_found", "no ticket issued for this order")
+    ticket_id = ticket.strip()
+    picked = None
+    if ticket_id:
+        for row in tickets:
+            if row["id"] == ticket_id:
+                picked = row
+                break
+    if picked is None:
+        picked = tickets[0]
+    reg = _registration_json(order)
+    holder = f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or order.buyer_name
+    venue = picked.get("event_venue_name") or ""
+    addr = ""
+    try:
+        from store import events_repo
+
+        ev = events_repo.get_event_by_id(state.store, order.event_id)
+        if not venue:
+            venue = ev.venue_name or ""
+        addr = ev.address or ""
+    except NotFoundError:
+        pass
+    if not picked.get("capability"):
+        return json_error(404, "not_found", "ticket capability missing")
+    png = render_pass_ticket_png(
+        TicketImageInput(
+            event_title=picked.get("event_title") or "Tdev Festival 2026",
+            pass_label=picked.get("ticket_type_name") or "Pass",
+            holder_name=holder,
+            when_label=_format_when_label(picked.get("event_starts_at")),
+            venue_line=_venue_line(venue, addr),
+            serial=picked["serial"],
+            capability=picked["capability"],
+        )
+    )
+    filename = f"billet-{picked['serial']}.png"
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/orders/{order_id}/guest/ticket.pdf")
+def guest_ticket_pdf(
+    order_id: str,
+    email: str = Query(""),
+    ticket: str = Query(""),
+    state: AppState = Depends(get_app_state),
+):
+    """PDF pass (same render as e-mail attachment) for guest download."""
+    buyer_email = email.strip().lower()
+    if not buyer_email:
+        return json_error(400, "invalid_request", "email query parameter is required")
+    try:
+        order = state.services.orders.get(order_id)
+    except NotFoundError:
+        return json_error(404, "not_found", "order not found")
+    if order.buyer_email.strip().lower() != buyer_email:
+        return json_error(404, "not_found", "order not found")
+    if order.status != "paid":
+        return json_error(400, "invalid_request", "ticket not available until order is paid")
+    tickets = _guest_tickets_json(state.store, order_id)
+    if not tickets:
+        return json_error(404, "not_found", "no ticket issued for this order")
+    ticket_id = ticket.strip()
+    picked = None
+    if ticket_id:
+        for row in tickets:
+            if row["id"] == ticket_id:
+                picked = row
+                break
+    if picked is None:
+        picked = tickets[0]
+    if not picked.get("capability"):
+        return json_error(404, "not_found", "ticket capability missing")
+    reg = _registration_json(order)
+    holder = f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or order.buyer_name
+    venue = picked.get("event_venue_name") or ""
+    addr = ""
+    try:
+        from store import events_repo
+
+        ev = events_repo.get_event_by_id(state.store, order.event_id)
+        if not venue:
+            venue = ev.venue_name or ""
+        addr = ev.address or ""
+    except NotFoundError:
+        pass
+    pdf = render_pass_ticket_pdf(
+        TicketImageInput(
+            event_title=picked.get("event_title") or "Tdev Festival 2026",
+            pass_label=picked.get("ticket_type_name") or "Pass",
+            holder_name=holder,
+            when_label=_format_when_label(picked.get("event_starts_at")),
+            venue_line=_venue_line(venue, addr),
+            serial=picked["serial"],
+            capability=picked["capability"],
+        )
+    )
+    filename = f"billet-{picked['serial']}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/events/{event_id}/orders")

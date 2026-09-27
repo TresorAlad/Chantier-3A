@@ -49,6 +49,11 @@ def get_event(event_id: str, state: AppState = Depends(get_app_state)):
         ):
             return json_error(404, "not_found", "event not found")
     try:
+        if ev.get("status") == "published":
+            try:
+                events_svc.ensure_festival_pass_products(state.store, ev["id"])
+            except events_svc.InvalidInput:
+                pass
         types = events_svc.list_storefront_products(state.store, ev["id"])
         keys = events_svc.issuer_keys_json(state.store, ev["id"])
     except NotFoundError:

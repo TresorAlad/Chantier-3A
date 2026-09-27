@@ -280,7 +280,8 @@ class OrdersService:
         items = order_items_repo.list_order_items_for_order(self._store, ord_row.id)
         paid_at = result.paid_at or datetime.now(timezone.utc)
         ev = events_repo.get_event_by_id(self._store, ord_row.event_id)
-        nbf = int(ev.starts_at.timestamp())
+        # Valid from purchase through event end (scan at registration / 3B before starts_at).
+        nbf = int(paid_at.timestamp())
         exp = int(ev.ends_at.timestamp())
         ref_year = paid_at.year
 

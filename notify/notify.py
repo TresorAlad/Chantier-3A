@@ -9,10 +9,50 @@ from urllib.parse import quote
 from email.message import EmailMessage
 
 from config import Config
+from notify.ticket_email import TicketEmailContext, TicketEmailLine, build_ticket_email
+from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf
 from store import events_repo, orders as orders_repo
 from store.store import Store
 
 log = logging.getLogger("chantier3a.notify")
+
+_FR_WEEKDAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+_FR_MONTHS = (
+    "janv.",
+    "févr.",
+    "mars",
+    "avr.",
+    "mai",
+    "juin",
+    "juil.",
+    "août",
+    "sept.",
+    "oct.",
+    "nov.",
+    "déc.",
+)
+
+
+def _format_when_label(iso: str | None) -> str | None:
+    from datetime import datetime
+
+    if not iso:
+        return None
+    try:
+        raw = iso.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        wd = _FR_WEEKDAYS[dt.weekday()]
+        month = _FR_MONTHS[dt.month - 1]
+        hour = dt.strftime("%I:%M %p").lstrip("0").lower()
+        return f"{wd}, {dt.day} {month} | {hour}"
+    except ValueError:
+        return None
+
+
+def _venue_line(venue: str, address: str) -> str:
+    parts = [venue.strip(), address.strip()]
+    joined = ", ".join(p for p in parts if p)
+    return joined or "Lieu à confirmer"
 
 
 class NotifyService:
@@ -47,31 +87,83 @@ class NotifyService:
         from store import tickets as tickets_repo
 
         base = self._config.base_url.rstrip("/")
+        billet_url = f"{base}/order/{ord_row.id}/billet?email={quote(ord_row.buyer_email)}"
         ticket_rows = tickets_repo.list_tickets_for_order(self._store, order_id)
-        pass_lines = ""
-        if ticket_rows:
-            pass_lines = "\n".join(f"- Pass {t.serial}" for t in ticket_rows) + "\n\n"
-        lookup = f"{base}/order/{ord_row.id}?email={quote(ord_row.buyer_email)}\n"
-        body = (
-            f"Hello {ord_row.buyer_name},\n\n"
-            f'Your order for "{ev.title}" is confirmed (ref. {ord_row.id}).\n'
-            f"Amount: {ord_row.total_minor} {ord_row.currency}\n\n"
-            f"{pass_lines}"
-            f"View your order and passes: {lookup}\n\n"
-            "Thank you,\nThe ticketing team\n"
+
+        holder = f"{getattr(ord_row, 'buyer_first_name', '')} {getattr(ord_row, 'buyer_last_name', '')}".strip()
+        if not holder:
+            holder = ord_row.buyer_name
+
+        when_label = _format_when_label(ev.starts_at.isoformat().replace("+00:00", "Z"))
+        venue = _venue_line(ev.venue_name or "", ev.address or "")
+
+        pdf_attachments: list[tuple[str, bytes]] = []
+        mail_lines: list[TicketEmailLine] = []
+        for t in ticket_rows:
+            if not t.capability:
+                continue
+            tt_name = ""
+            row = self._store.fetchone("SELECT name FROM ticket_types WHERE id = ?", (t.ticket_type_id,))
+            if row is not None:
+                tt_name = row["name"] if hasattr(row, "keys") else row[0]
+            holder_name = t.holder_name or holder
+            mail_lines.append(
+                TicketEmailLine(
+                    pass_label=tt_name or "Pass",
+                    holder_name=holder_name,
+                    serial=t.serial,
+                )
+            )
+            pdf = render_pass_ticket_pdf(
+                TicketImageInput(
+                    event_title=ev.title,
+                    pass_label=tt_name or "Pass",
+                    holder_name=holder_name,
+                    when_label=when_label,
+                    venue_line=venue,
+                    serial=t.serial,
+                    capability=t.capability,
+                )
+            )
+            pdf_attachments.append((f"billet-{t.serial}.pdf", pdf))
+
+        contact_url = f"{base}/contact" if base else None
+        subject, plain, html = build_ticket_email(
+            TicketEmailContext(
+                buyer_name=ord_row.buyer_name,
+                event_title=ev.title,
+                when_label=when_label,
+                venue_line=venue,
+                billet_url=billet_url,
+                tickets=tuple(mail_lines),
+                contact_url=contact_url,
+            )
         )
+
         try:
-            self._send_smtp(ord_row.buyer_email, f"Confirmation - {ev.title}", body)
+            self._send_smtp(ord_row.buyer_email, subject, plain, html, pdf_attachments)
         except Exception as err:
             log.error("notify: send failed order=%s err=%s", order_id, err)
 
-    def _send_smtp(self, to: str, subject: str, body: str) -> None:
+    def _send_smtp(
+        self,
+        to: str,
+        subject: str,
+        plain: str,
+        html: str | None = None,
+        file_attachments: list[tuple[str, bytes]] | None = None,
+    ) -> None:
         """Send smtp on ``NotifyService``."""
         msg = EmailMessage()
         msg["From"] = self._config.smtp_from
         msg["To"] = to
         msg["Subject"] = subject
-        msg.set_content(body)
+        msg.set_content(plain)
+        if html:
+            msg.add_alternative(html, subtype="html")
+        if file_attachments:
+            for filename, data in file_attachments:
+                msg.add_attachment(data, maintype="application", subtype="pdf", filename=filename)
         addr = f"{self._config.smtp_host}:{self._config.smtp_port}"
         with smtplib.SMTP(self._config.smtp_host, self._config.smtp_port, timeout=30) as smtp:
             if self._config.smtp_user:

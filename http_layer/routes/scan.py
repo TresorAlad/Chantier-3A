@@ -92,7 +92,27 @@ def scan_ticket(body: ScanBody, state: AppState = Depends(require_user)):
     result = admission.decide(
         body.capability, ring, body.event_id, seen, now, store=state.store
     )
-    return {"result": result.status.value, "reason": result.reason, "ticket_id": result.payload.tid if result.payload else ""}
+    out = {
+        "result": result.status.value,
+        "reason": result.reason,
+        "ticket_id": result.payload.tid if result.payload else "",
+        "serial": "",
+        "holder_name": "",
+    }
+    tid = result.payload.tid if result.payload else ""
+    if tid:
+        row = state.store.fetchone(
+            "SELECT serial, holder_name FROM tickets WHERE id = ?",
+            (tid,),
+        )
+        if row is not None:
+            if hasattr(row, "keys"):
+                out["serial"] = row["serial"] or ""
+                out["holder_name"] = row["holder_name"] or ""
+            else:
+                out["serial"] = row[0] or ""
+                out["holder_name"] = row[1] or ""
+    return out
 
 
 @router.get("/events/{event_id}/attendees")
@@ -103,9 +123,11 @@ def list_attendees(event_id: str, state: AppState = Depends(require_user)):
     rows = state.store.fetchall(
         """
         SELECT t.id, t.order_id, t.serial, t.holder_name, t.status, t.ticket_type_id,
-               tt.name AS ticket_type_name
+               tt.name AS ticket_type_name,
+               o.buyer_email, o.buyer_first_name, o.buyer_last_name, o.school_name
         FROM tickets t
         JOIN ticket_types tt ON tt.id = t.ticket_type_id
+        JOIN orders o ON o.id = t.order_id
         WHERE t.event_id = ?
         ORDER BY t.issued_at ASC, t.id ASC
         """,
@@ -123,6 +145,10 @@ def list_attendees(event_id: str, state: AppState = Depends(require_user)):
                     "status": row["status"],
                     "ticket_type_id": row["ticket_type_id"],
                     "ticket_type_name": row["ticket_type_name"],
+                    "email": row["buyer_email"],
+                    "first_name": row["buyer_first_name"] or "",
+                    "last_name": row["buyer_last_name"] or "",
+                    "school_name": row["school_name"] or "",
                 }
             )
     return {"attendees": attendees}

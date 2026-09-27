@@ -20,6 +20,7 @@ from http_layer.routes import (
     event_pages,
     events,
     events_admin,
+    contact,
     extras,
     media,
     meta,
@@ -91,6 +92,7 @@ def create_app(
 
     api = APIRouter(prefix="/api")
     api.include_router(meta.api_router)
+    api.include_router(contact.router)
     api.include_router(auth.router)
     api.include_router(events.router)
     api.include_router(events_admin.router)

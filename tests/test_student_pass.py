@@ -7,29 +7,35 @@ from fastapi.testclient import TestClient
 
 from conftest import seed_published_event
 from events import service as events_svc
-from events.passes import STUDENT_PASS_TICKET_TYPE_BODY
+from events.passes import (
+    PASS_TIER_PRICE_MINOR,
+    STANDARD_PASS_TICKET_TYPE_BODY,
+    STUDENT_PASS_TICKET_TYPE_BODY,
+    VIP_PASS_TICKET_TYPE_BODY,
+)
 
 
 def test_pass_tier_catalog(client: TestClient):
-    """Only the student pass is listed for now."""
+    """Student, standard and VIP passes are listed with catalog prices."""
     resp = client.get("/api/pass-tiers")
     assert resp.status_code == 200
     tiers = resp.json()["pass_tiers"]
-    assert len(tiers) == 1
-    assert tiers[0]["id"] == "student"
-    assert tiers[0]["price_minor"] == 0
+    assert len(tiers) == 3
+    by_id = {t["id"]: t for t in tiers}
+    assert by_id["student"]["price_minor"] == 0
+    assert by_id["standard"]["price_minor"] == PASS_TIER_PRICE_MINOR["standard"]
+    assert by_id["vip"]["price_minor"] == PASS_TIER_PRICE_MINOR["vip"]
 
 
-def test_vip_pass_not_available_yet(demo_store):
-    """Standard and VIP passes cannot be created until prices are defined."""
+def test_standard_and_vip_pass_can_be_created(demo_store):
     store, _cfg, _services, _app = demo_store
     fx = seed_published_event(store)
-    with pytest.raises(events_svc.InvalidInput):
-        events_svc.create_ticket_type(
-            store,
-            fx["event_id"],
-            {**STUDENT_PASS_TICKET_TYPE_BODY, "name": "Pass VIP", "pass_tier": "vip"},
-        )
+    std = events_svc.create_ticket_type(store, fx["event_id"], STANDARD_PASS_TICKET_TYPE_BODY)
+    vip = events_svc.create_ticket_type(store, fx["event_id"], VIP_PASS_TICKET_TYPE_BODY)
+    assert std["pass_tier"] == "standard"
+    assert std["price_minor"] == 2000
+    assert vip["pass_tier"] == "vip"
+    assert vip["price_minor"] == 5000
 
 
 def test_student_pass_requires_registration(client: TestClient, demo_store):

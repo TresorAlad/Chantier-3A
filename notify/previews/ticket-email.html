@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aperçu e-mail billet - Tdev Festival</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e5e5e5;
+    }
+    .banner {
+      padding: 20px 24px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+    }
+    .banner h1 {
+      margin: 0 0 8px;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .banner p {
+      margin: 4px 0;
+      font-size: 0.875rem;
+      color: #a3a3a3;
+      line-height: 1.5;
+    }
+    .banner .subject {
+      color: #6ee7b7;
+      font-weight: 500;
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    section {
+      margin-bottom: 32px;
+    }
+    section h2 {
+      margin: 0 0 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #737373;
+    }
+    .iframe-wrap {
+      border: 1px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0a0a0a;
+    }
+    iframe {
+      display: block;
+      width: 100%;
+      min-height: 720px;
+      border: 0;
+    }
+    pre.plain {
+      margin: 0;
+      padding: 20px;
+      background: #141414;
+      border: 1px solid #333;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #d4d4d4;
+    }
+    .note {
+      font-size: 13px;
+      color: #737373;
+      margin-top: 8px;
+    }
+    a.link {
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+  <header class="banner">
+    <h1>Aperçu - E-mail confirmation billet</h1>
+    <p class="subject">Objet : Votre pass Tdev Festival - Tdev Festival 2026</p>
+    <p>
+      Fichier généré par
+      <code>python -m notify.preview_ticket_email</code>.
+      Les PDF restent des pièces jointes réelles à l'envoi SMTP.
+    </p>
+    <p>
+      Corps HTML seul :
+      <a class="link" href="ticket-email-body.html">ticket-email-body.html</a>
+    </p>
+  </header>
+  <main>
+    <section aria-labelledby="html-preview">
+      <h2 id="html-preview">Rendu HTML (client mail)</h2>
+      <div class="iframe-wrap">
+        <iframe title="Aperçu HTML e-mail billet" src="ticket-email-body.html"></iframe>
+      </div>
+      <p class="note">Ouvrez ticket-email-body.html pour voir le mail seul, sans chrome d'aperçu.</p>
+    </section>
+    <section aria-labelledby="plain-preview">
+      <h2 id="plain-preview">Version texte brut</h2>
+      <pre class="plain">Bonjour Awa,
+
+Merci pour votre inscription au Tdev Festival 2026.
+
+Votre pass pour « Tdev Festival 2026 » est confirmé.
+
+Informations pratiques
+  Date : samedi, 21 nov. | 9:00 am
+  Lieu : Lomé Convention Center, Lomé, Togo
+
+Détail de votre pass
+  - Pass Standard · Awa Mensah · n° TDEV-2026-0042
+
+1 billet PDF est joint à ce message.
+Présentez le QR code du PDF à l'entrée (impression ou écran de téléphone).
+
+Vous pouvez aussi ouvrir ou retélécharger votre billet en ligne :
+https://festival.ourtdev.com/order/01EXAMPLE/billet?email=awa.mensah%40example.com
+
+Conseils
+  - Conservez cet e-mail et le PDF jusqu'à la fin de l'événement.
+  - Si la pièce jointe n'apparaît pas, vérifiez le dossier spam ou utilisez le lien ci-dessus.
+
+À très bientôt à Lomé,
+L'équipe T-Dev Festival
+
+Une question ? https://festival.ourtdev.com/contact</pre>
+    </section>
+  </main>
+</body>
+</html>

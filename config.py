@@ -38,6 +38,7 @@ ENV_PAYMENT_PROVIDER_NAME = "CHANTIER3A_PAYMENT_PROVIDER_NAME"
 ENV_PAYMENT_SERVICE_TIMEOUT = "CHANTIER3A_PAYMENT_SERVICE_TIMEOUT"
 ENV_KEY_PASSPHRASE = "CHANTIER3A_KEY_PASSPHRASE"
 ENV_PUBLIC_SIGNUP = "CHANTIER3A_PUBLIC_SIGNUP"
+ENV_CONTACT_TO = "CHANTIER3A_CONTACT_TO"
 
 DEFAULT_ADDR = ":8080"
 DEFAULT_DATA_DIR = "./data"
@@ -70,6 +71,7 @@ class Config:
     payment_provider_name: str
     payment_service_timeout: int
     public_signup: bool
+    contact_to: str
 
 
 def load_env_file() -> Path | None:
@@ -174,4 +176,5 @@ def load_config(
         payment_provider_name=_env(ENV_PAYMENT_PROVIDER_NAME) or "community-pay",
         payment_service_timeout=pay_timeout,
         public_signup=demo or _truthy(ENV_PUBLIC_SIGNUP),
+        contact_to=_env(ENV_CONTACT_TO),
     )

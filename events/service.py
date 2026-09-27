@@ -357,6 +357,25 @@ def list_storefront_products(st: Store, event_id: str) -> list[dict]:
     ]
 
 
+def ensure_festival_pass_products(st: Store, event_id: str) -> None:
+    """Ensure each enabled pass tier has an active ticket type (storefront bootstrap)."""
+    events_repo.get_event_by_id(st, event_id)
+    existing_by_tier: dict[str, tt_repo.TicketType] = {}
+    for row in tt_repo.list_ticket_types_for_event(st, event_id):
+        tier = pass_catalog.normalize_pass_tier(row.pass_tier)
+        if tier:
+            existing_by_tier[tier] = row
+    for tier in pass_catalog.ENABLED_PASS_TIERS:
+        body = pass_catalog.DEFAULT_PASS_TICKET_TYPE_BODIES[tier]
+        if tier not in existing_by_tier:
+            create_ticket_type(st, event_id, body)
+            continue
+        existing = existing_by_tier[tier]
+        expected = pass_catalog.PASS_TIER_PRICE_MINOR[tier]
+        if existing.price_minor != expected:
+            update_ticket_type(st, existing.id, {"price_minor": expected})
+
+
 def _validate_ticket_type_input(body: dict, *, existing: tt_repo.TicketType | None = None) -> None:
     """Internal: validate ticket type input."""
     if existing is None and not str(body.get("name") or "").strip():

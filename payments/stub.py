@@ -45,7 +45,6 @@ class StubProvider:
         return pt.Charge(
             provider=self.name(),
             reference=ref,
-            instructions="Demo mode: this order auto-settles instantly. No real payment was taken.",
         )
 
     def verify(self, reference: str) -> pt.Result:

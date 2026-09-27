@@ -12,8 +12,7 @@ PASS_TIER_VIP = "vip"
 
 ALL_PASS_TIERS = (PASS_TIER_STUDENT, PASS_TIER_STANDARD, PASS_TIER_VIP)
 
-# Standard and VIP prices are not defined yet; only the student pass is on sale.
-ENABLED_PASS_TIERS = (PASS_TIER_STUDENT,)
+ENABLED_PASS_TIERS = ALL_PASS_TIERS
 
 PASS_TIER_LABELS: dict[str, str] = {
     PASS_TIER_STUDENT: "Pass étudiant",
@@ -21,16 +20,52 @@ PASS_TIER_LABELS: dict[str, str] = {
     PASS_TIER_VIP: "Pass VIP",
 }
 
+PASS_TIER_PRICE_MINOR: dict[str, int] = {
+    PASS_TIER_STUDENT: 0,
+    PASS_TIER_STANDARD: 2000,
+    PASS_TIER_VIP: 5000,
+}
+
 STUDENT_PASS_TICKET_TYPE_BODY: dict = {
     "name": PASS_TIER_LABELS[PASS_TIER_STUDENT],
-    "description": "",
-    "price_minor": 0,
+    "description": "Inscription étudiant·e - gratuite sur validation.",
+    "price_minor": PASS_TIER_PRICE_MINOR[PASS_TIER_STUDENT],
     "quantity_total": 0,
     "max_per_order": 1,
     "status": "active",
     "sort_order": 0,
     "product_kind": "ticket",
     "pass_tier": PASS_TIER_STUDENT,
+}
+
+STANDARD_PASS_TICKET_TYPE_BODY: dict = {
+    "name": PASS_TIER_LABELS[PASS_TIER_STANDARD],
+    "description": "Accès complet aux deux jours du festival.",
+    "price_minor": PASS_TIER_PRICE_MINOR[PASS_TIER_STANDARD],
+    "quantity_total": 0,
+    "max_per_order": 5,
+    "status": "active",
+    "sort_order": 1,
+    "product_kind": "ticket",
+    "pass_tier": PASS_TIER_STANDARD,
+}
+
+VIP_PASS_TICKET_TYPE_BODY: dict = {
+    "name": PASS_TIER_LABELS[PASS_TIER_VIP],
+    "description": "Expérience premium Tdev Festival.",
+    "price_minor": PASS_TIER_PRICE_MINOR[PASS_TIER_VIP],
+    "quantity_total": 0,
+    "max_per_order": 5,
+    "status": "active",
+    "sort_order": 2,
+    "product_kind": "ticket",
+    "pass_tier": PASS_TIER_VIP,
+}
+
+DEFAULT_PASS_TICKET_TYPE_BODIES: dict[str, dict] = {
+    PASS_TIER_STUDENT: STUDENT_PASS_TICKET_TYPE_BODY,
+    PASS_TIER_STANDARD: STANDARD_PASS_TICKET_TYPE_BODY,
+    PASS_TIER_VIP: VIP_PASS_TICKET_TYPE_BODY,
 }
 
 
@@ -42,9 +77,8 @@ def pass_tier_catalog() -> list[dict]:
             "id": tier,
             "label": PASS_TIER_LABELS[tier],
             "available": True,
+            "price_minor": PASS_TIER_PRICE_MINOR[tier],
         }
-        if tier == PASS_TIER_STUDENT:
-            entry["price_minor"] = 0
         out.append(entry)
     return out
 

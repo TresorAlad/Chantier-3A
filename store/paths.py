@@ -11,10 +11,3 @@ _MONOREPO_MIGRATIONS = REPO_ROOT / "backend" / "internal" / "store" / "migration
 MIGRATIONS_DIR = (
     _BUNDLED_MIGRATIONS if _BUNDLED_MIGRATIONS.is_dir() else _MONOREPO_MIGRATIONS
 )
-
-_bundled_frontend_dist = _BACKEND_PYTHON_ROOT / "frontend" / "dist"
-FRONTEND_DIST = (
-    _bundled_frontend_dist
-    if _bundled_frontend_dist.is_dir()
-    else REPO_ROOT / "frontend" / "dist"
-)

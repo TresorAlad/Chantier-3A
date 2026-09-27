@@ -22,7 +22,7 @@ Ordre d'emission canonique (cle insertion) :
 |-----|------|-------------|-------------|
 | `v` | int | oui | Version du format (1). |
 | `tid` | string | oui | Identifiant technique billet (ULID), dedupe admission. |
-| `ref` | string | oui | Reference publique `TDEV-YYYY-NNNN` (affichee participant, stockee en BDD). |
+| `ref` | string | oui | Reference publique `TDEV-YYYY-NNNN` (4 chiffres aleatoires uniques, affichee participant, stockee en BDD). |
 | `eid` | string | oui | Evenement. |
 | `tt` | string | oui | Type de billet / pass tier. |
 | `kid` | string | oui | Identifiant cle Ed25519 evenement. |
@@ -35,7 +35,7 @@ Ordre d'emission canonique (cle insertion) :
 
 ### Fenetre evenement
 
-- A l'emission : `nbf = starts_at`, `exp = ends_at`, **sans marge**.
+- A l'emission : `nbf = paid_at` (valide des l'achat / inscription), `exp = ends_at`.
 - Meme fenetre pour tous les pass tiers ; la distinction produit reste dans `tt` / pass tier.
 - Au scan : refus si `nbf <= 0` ou `exp <= 0` (pas de retrocompatibilite billets sans fenetre).
 
