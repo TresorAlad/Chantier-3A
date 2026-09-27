@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Retire Co-authored-by Cursor injecte par l'IDE ou l'agent.
+MSG_FILE=$1
+[[ -f "$MSG_FILE" ]] || exit 0
+sed -i '/cursoragent@cursor\.com/d' "$MSG_FILE"
+sed -i '/^Co-authored-by: Cursor/d' "$MSG_FILE"
+exit 0
