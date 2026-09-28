@@ -12,7 +12,7 @@ L'API est fournie par `backend-python/` (FastAPI). En développement, le proxy V
 ## Installation
 
 ```bash
-cd billetterie-frontend
+cd frontend-web
 npm install
 cp .env.example .env
 # Éditer .env (proxy API, slug événement, etc.)

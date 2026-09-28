@@ -1,4 +1,4 @@
-# Branche `feat/frontend` — Chantier 3A
+# Branche `feat/frontend-web` — Chantier 3A
 
 Le code de la billetterie et de la vitrine React se trouve dans le dossier **`frontend-web/`**.
 
