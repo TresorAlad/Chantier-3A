@@ -55,13 +55,16 @@ Le code lit les variables via `src/lib/env.ts` (validation des chemins et URLs).
 | `main.tsx` | Routes (`/`, admin configurable) |
 | `lib/api.ts` | Client HTTP `/api` |
 | `lib/env.ts` | Accès sécurisé aux variables `VITE_*` |
-| `lib/billetterie-storefront.ts` | Chargement événement + types de billets |
+| `lib/static-billetterie-catalog.ts` | Contenu landing (passes, prix affichés) sans API |
+| `lib/billetterie-storefront.ts` | API au checkout : événement + types de billets réels |
 | `lib/billetterie-checkout.ts` | Création commande + verify (gratuit) |
 
 ## Parcours utilisateur
 
-1. **Pass gratuit (Pass Festival)** : formulaire → `POST /api/orders` → `POST /api/payments/verify` → popup « inscription réussie », billet par e-mail.
-2. **Pass payant (Pass Nexus Night)** : même flux → redirection paiement → e-mail billet après confirmation du paiement côté backend.
+La **landing** et le **formulaire** fonctionnent sans backend (catalogue statique). L'**API** n'est appelée qu'à la soumission (« Valider l'inscription » / « Continuer vers le paiement »). Goodies : lien externe uniquement.
+
+1. **Pass Festival (gratuit)** : formulaire → API → `POST /api/orders` → verify → popup succès, billet par e-mail.
+2. **Pass Nexus Night (payant)** : formulaire → API → commande → redirection paiement si disponible → billet par e-mail.
 
 ## Sécurité (résumé)
 

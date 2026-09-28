@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Loader2, Calendar, MapPin, Moon, Sun, Check, Gift } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/components/theme-provider';
@@ -16,14 +16,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiError } from '@/lib/api';
-import type { FestivalEvent } from '@/lib/api-types';
-import { loadBilletterieStorefront, type BilletterieProduct } from '@/lib/billetterie-storefront';
+import { resolveLiveCheckoutProduct } from '@/lib/billetterie-storefront';
 import {
     completeCheckout,
-    validateRegistration,
+    validateRegistrationForCheckoutTier,
     type RegistrationInput,
 } from '@/lib/billetterie-checkout';
+import {
+    getStaticBilletterieListing,
+    STATIC_FESTIVAL_TITLE,
+    STATIC_VENUE_LABEL,
+    type BilletterieListingProduct,
+} from '@/lib/static-billetterie-catalog';
+import { checkoutFailureCopy } from '@/lib/user-facing-checkout-error';
 
 const emptyForm = (): RegistrationInput => ({
     first_name: '',
@@ -35,14 +40,11 @@ const emptyForm = (): RegistrationInput => ({
 });
 
 export default function App() {
-    const [event, setEvent] = useState<FestivalEvent | null>(null);
-    const [products, setProducts] = useState<BilletterieProduct[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const products = useMemo(() => getStaticBilletterieListing(), []);
     const { theme, setTheme } = useTheme();
 
     const [registerOpen, setRegisterOpen] = useState(false);
-    const [activeProduct, setActiveProduct] = useState<BilletterieProduct | null>(null);
+    const [activeListing, setActiveListing] = useState<BilletterieListingProduct | null>(null);
     const [form, setForm] = useState(emptyForm);
     const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof RegistrationInput, string>>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -51,34 +53,22 @@ export default function App() {
     const [successTitle, setSuccessTitle] = useState('');
     const [successBody, setSuccessBody] = useState('');
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await loadBilletterieStorefront();
-                if (cancelled) return;
-                setEvent(data.event);
-                setProducts(data.products);
-            } catch (err) {
-                if (cancelled) return;
-                const message =
-                    err instanceof ApiError
-                        ? err.message
-                        : err instanceof Error
-                          ? err.message
-                          : 'Erreur lors du chargement des billets.';
-                setError(message);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const [failureOpen, setFailureOpen] = useState(false);
+    const [failureTitle, setFailureTitle] = useState('');
+    const [failureBody, setFailureBody] = useState('');
 
-    const openRegistration = (product: BilletterieProduct) => {
-        setActiveProduct(product);
+    const openExternal = (url: string) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
+    const beginCheckout = (listing: BilletterieListingProduct) => {
+        if (listing.externalUrl) {
+            openExternal(listing.externalUrl);
+            return;
+        }
+        if (!listing.checkoutTier) return;
+
+        setActiveListing(listing);
         setForm(emptyForm());
         setFieldErrors({});
         setRegisterOpen(true);
@@ -90,19 +80,28 @@ export default function App() {
         setSuccessOpen(true);
     };
 
+    const showFailure = (err: unknown) => {
+        const copy = checkoutFailureCopy(err);
+        setFailureTitle(copy.title);
+        setFailureBody(copy.body);
+        setFailureOpen(true);
+    };
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!event || !activeProduct || activeProduct.externalUrl) return;
+        if (!activeListing?.checkoutTier) return;
 
-        const nextErrors = validateRegistration(form, activeProduct.ticketType);
+        const nextErrors = validateRegistrationForCheckoutTier(form, activeListing.checkoutTier);
         setFieldErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) return;
 
+        const passTitle = activeListing.title;
         setSubmitting(true);
         try {
+            const live = await resolveLiveCheckoutProduct(activeListing.checkoutTier);
             const outcome = await completeCheckout({
-                eventId: event.id,
-                ticketType: activeProduct.ticketType,
+                eventId: live.event.id,
+                ticketType: live.product.ticketType,
                 registration: form,
             });
             setRegisterOpen(false);
@@ -110,7 +109,7 @@ export default function App() {
             if (outcome.kind === 'free_confirmed') {
                 showSuccess(
                     'Inscription réussie',
-                    `Merci ! Votre inscription au ${activeProduct.title} est confirmée. Vous recevrez votre billet par e-mail à ${outcome.email} dans quelques instants. Pensez à vérifier vos spams.`,
+                    `Merci ! Votre inscription au ${passTitle} est confirmée. Vous recevrez votre billet par e-mail à ${outcome.email} dans quelques instants. Pensez à vérifier vos spams.`,
                 );
                 return;
             }
@@ -118,7 +117,7 @@ export default function App() {
             if (outcome.redirectUrl) {
                 showSuccess(
                     'Paiement sécurisé',
-                    `Après validation de votre paiement pour le ${activeProduct.title}, vous recevrez votre billet par e-mail à ${outcome.email}.`,
+                    `Après validation de votre paiement pour le ${passTitle}, vous recevrez votre billet par e-mail à ${outcome.email}.`,
                 );
                 window.setTimeout(() => {
                     window.location.href = outcome.redirectUrl!;
@@ -128,21 +127,18 @@ export default function App() {
 
             showSuccess(
                 'Commande enregistrée',
-                `Une fois le paiement confirmé, votre billet ${activeProduct.title} vous sera envoyé par e-mail à ${outcome.email}.`,
+                `Une fois le paiement confirmé, votre billet ${passTitle} vous sera envoyé par e-mail à ${outcome.email}.`,
             );
         } catch (err) {
-            const message =
-                err instanceof ApiError
-                    ? err.message
-                    : 'Impossible de finaliser pour le moment. Réessayez dans quelques instants.';
-            setFieldErrors({ email: message });
+            showFailure(err);
         } finally {
             setSubmitting(false);
         }
     };
 
-    const venue = event?.venue_name?.trim() || 'Lieu principal du festival';
-    const isStudentPass = activeProduct?.ticketType.pass_tier === 'student';
+    const venue = STATIC_VENUE_LABEL;
+    const heroTitle = STATIC_FESTIVAL_TITLE;
+    const isStudentPass = activeListing?.checkoutTier === 'student';
 
     return (
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -180,7 +176,7 @@ export default function App() {
                 <div className="container relative z-10 text-center flex flex-col items-center">
                     <h1 className="text-4xl md:text-display-xl font-display font-black tracking-tight text-foreground max-w-4xl leading-tight">
                         Réservez vos tickets pour le{' '}
-                        <span className="text-primary">{event?.title ?? 'TDEV Festival 2026'}</span>
+                        <span className="text-primary">{heroTitle}</span>
                     </h1>
                     <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
                         Accédez aux conférences, aux ateliers, à la soirée Nexus Night et repartez avec le Welcome Pack
@@ -200,128 +196,118 @@ export default function App() {
             </section>
 
             <main id="passes" className="container py-10 pb-20">
-                {loading ? (
-                    <div className="flex justify-center items-center min-h-[300px]">
-                        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                    </div>
-                ) : error ? (
-                    <div className="bg-destructive/10 text-destructive p-4 rounded-lg text-center max-w-md mx-auto border border-destructive/20">
-                        <p>{error}</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-                        {products.map((ticket, index) => (
-                            <motion.div
-                                key={ticket.ticketType.id}
-                                initial={{ opacity: 0, y: 25 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.45, delay: index * 0.12 }}
-                                className="flex"
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                    {products.map((ticket, index) => (
+                        <motion.div
+                            key={ticket.listingId}
+                            initial={{ opacity: 0, y: 25 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.45, delay: index * 0.12 }}
+                            className="flex"
+                        >
+                            <Card
+                                className={`w-full flex flex-col overflow-hidden relative transition-all duration-300 hover:shadow-floating hover:-translate-y-1 ${
+                                    ticket.popular
+                                        ? 'border-2 border-primary shadow-glow-primary bg-card/90'
+                                        : 'border-border/60 bg-card/60 hover:border-primary/40'
+                                }`}
                             >
-                                <Card
-                                    className={`w-full flex flex-col overflow-hidden relative transition-all duration-300 hover:shadow-floating hover:-translate-y-1 ${
-                                        ticket.popular
-                                            ? 'border-2 border-primary shadow-glow-primary bg-card/90'
-                                            : 'border-border/60 bg-card/60 hover:border-primary/40'
-                                    }`}
-                                >
-                                    {ticket.badgeText && (
-                                        <div className="absolute top-4 right-4 z-10">
-                                            <Badge
-                                                variant={ticket.popular ? 'default' : 'secondary'}
-                                                className="font-semibold text-xs shadow-sm"
-                                            >
-                                                {ticket.badgeText}
-                                            </Badge>
-                                        </div>
-                                    )}
-
-                                    <div className="relative h-44 overflow-hidden bg-muted/50">
-                                        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
-                                        <div className="absolute bottom-4 left-6 right-6">
-                                            <span className="text-xs uppercase tracking-wider text-primary font-bold">
-                                                {ticket.category}
-                                            </span>
-                                            <h3 className="font-display font-extrabold text-2xl text-foreground mt-0.5 leading-snug">
-                                                {ticket.title}
-                                            </h3>
-                                            {ticket.subtitle && (
-                                                <p className="text-sm text-muted-foreground mt-0.5">{ticket.subtitle}</p>
-                                            )}
-                                        </div>
+                                {ticket.badgeText && (
+                                    <div className="absolute top-4 right-4 z-10">
+                                        <Badge
+                                            variant={ticket.popular ? 'default' : 'secondary'}
+                                            className="font-semibold text-xs shadow-sm"
+                                        >
+                                            {ticket.badgeText}
+                                        </Badge>
                                     </div>
+                                )}
 
-                                    <CardHeader className="pt-2 pb-4">
-                                        <div className="flex items-baseline gap-2 mb-2">
-                                            <span
-                                                className={`font-display font-black text-3xl tracking-tight ${
-                                                    ticket.isFree
-                                                        ? 'text-emerald-500 dark:text-emerald-400'
-                                                        : 'text-foreground'
-                                                }`}
-                                            >
-                                                {ticket.priceLabel}
-                                            </span>
-                                        </div>
-                                        <CardDescription className="text-sm leading-relaxed text-muted-foreground">
-                                            {ticket.description}
-                                        </CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent className="mt-auto pt-2 pb-6 flex-grow">
-                                        <div className="border-t border-border/40 pt-4">
-                                            <p className="text-xs font-bold uppercase tracking-wider text-foreground/80 mb-3 flex items-center gap-1.5">
-                                                <Gift className="h-3.5 w-3.5 text-primary" /> Ce qui est inclus :
-                                            </p>
-                                            <ul className="space-y-2.5 text-sm">
-                                                {ticket.inclusions.map((item) => (
-                                                    <li key={item} className="flex items-start gap-2.5">
-                                                        <div className="mt-0.5 p-0.5 rounded-full bg-primary/10 text-primary shrink-0">
-                                                            <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                                                        </div>
-                                                        <span className="text-foreground/90 font-medium leading-tight">
-                                                            {item}
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    </CardContent>
-
-                                    <CardFooter className="pt-4 pb-6 border-t border-border/40 bg-muted/20">
-                                        {ticket.externalUrl ? (
-                                            <Button
-                                                variant="outline"
-                                                className="w-full font-bold h-11"
-                                                onClick={() => window.open(ticket.externalUrl, '_blank')}
-                                            >
-                                                Découvrir les goodies
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                variant={ticket.popular ? 'default' : 'outline'}
-                                                className={`w-full font-bold h-11 ${
-                                                    ticket.popular ? 'shadow-glow-primary' : ''
-                                                }`}
-                                                onClick={() => openRegistration(ticket)}
-                                            >
-                                                {ticket.isFree ? 'Réserver gratuitement' : 'Choisir ce pass'}
-                                            </Button>
+                                <div className="relative h-44 overflow-hidden bg-muted/50">
+                                    <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
+                                    <div className="absolute bottom-4 left-6 right-6">
+                                        <span className="text-xs uppercase tracking-wider text-primary font-bold">
+                                            {ticket.category}
+                                        </span>
+                                        <h3 className="font-display font-extrabold text-2xl text-foreground mt-0.5 leading-snug">
+                                            {ticket.title}
+                                        </h3>
+                                        {ticket.subtitle && (
+                                            <p className="text-sm text-muted-foreground mt-0.5">{ticket.subtitle}</p>
                                         )}
-                                    </CardFooter>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </div>
-                )}
+                                    </div>
+                                </div>
+
+                                <CardHeader className="pt-2 pb-4">
+                                    <div className="flex items-baseline gap-2 mb-2">
+                                        <span
+                                            className={`font-display font-black text-3xl tracking-tight ${
+                                                ticket.isFree
+                                                    ? 'text-emerald-500 dark:text-emerald-400'
+                                                    : 'text-foreground'
+                                            }`}
+                                        >
+                                            {ticket.priceLabel}
+                                        </span>
+                                    </div>
+                                    <CardDescription className="text-sm leading-relaxed text-muted-foreground">
+                                        {ticket.description}
+                                    </CardDescription>
+                                </CardHeader>
+
+                                <CardContent className="mt-auto pt-2 pb-6 flex-grow">
+                                    <div className="border-t border-border/40 pt-4">
+                                        <p className="text-xs font-bold uppercase tracking-wider text-foreground/80 mb-3 flex items-center gap-1.5">
+                                            <Gift className="h-3.5 w-3.5 text-primary" /> Ce qui est inclus :
+                                        </p>
+                                        <ul className="space-y-2.5 text-sm">
+                                            {ticket.inclusions.map((item) => (
+                                                <li key={item} className="flex items-start gap-2.5">
+                                                    <div className="mt-0.5 p-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                                                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                                    </div>
+                                                    <span className="text-foreground/90 font-medium leading-tight">
+                                                        {item}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </CardContent>
+
+                                <CardFooter className="pt-4 pb-6 border-t border-border/40 bg-muted/20">
+                                    {ticket.externalUrl ? (
+                                        <Button
+                                            variant="outline"
+                                            className="w-full font-bold h-11"
+                                            onClick={() => beginCheckout(ticket)}
+                                        >
+                                            Découvrir les goodies
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant={ticket.popular ? 'default' : 'outline'}
+                                            className={`w-full font-bold h-11 ${
+                                                ticket.popular ? 'shadow-glow-primary' : ''
+                                            }`}
+                                            onClick={() => beginCheckout(ticket)}
+                                        >
+                                            {ticket.isFree ? 'Réserver gratuitement' : 'Choisir ce pass'}
+                                        </Button>
+                                    )}
+                                </CardFooter>
+                            </Card>
+                        </motion.div>
+                    ))}
+                </div>
             </main>
 
             <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
                 <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>{activeProduct?.title ?? 'Inscription'}</DialogTitle>
+                        <DialogTitle>{activeListing?.title ?? 'Inscription'}</DialogTitle>
                         <DialogDescription>
-                            {activeProduct?.isFree
+                            {activeListing?.isFree
                                 ? 'Complétez le formulaire pour recevoir votre pass par e-mail.'
                                 : 'Après paiement, votre billet vous sera envoyé par e-mail.'}
                         </DialogDescription>
@@ -407,7 +393,7 @@ export default function App() {
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         Envoi en cours…
                                     </>
-                                ) : activeProduct?.isFree ? (
+                                ) : activeListing?.isFree ? (
                                     'Valider l\'inscription'
                                 ) : (
                                     'Continuer vers le paiement'
@@ -426,6 +412,20 @@ export default function App() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button className="w-full" onClick={() => setSuccessOpen(false)}>
+                            Fermer
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={failureOpen} onOpenChange={setFailureOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{failureTitle}</DialogTitle>
+                        <DialogDescription className="text-base leading-relaxed pt-2">{failureBody}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button className="w-full" variant="secondary" onClick={() => setFailureOpen(false)}>
                             Fermer
                         </Button>
                     </DialogFooter>

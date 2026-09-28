@@ -212,8 +212,7 @@ export async function request<T = unknown>(path: string, options: RequestOptions
             response.status >= 500 &&
             (!message || message === 'Internal Server Error' || message === 'Request failed')
         ) {
-            message =
-                'Le serveur billetterie ne répond pas. Démarrez backend-python (port configuré dans VITE_DEV_API_PROXY, ex. 8088).';
+            message = 'Service billetterie temporairement indisponible.';
         }
         const code = (typeof errShape?.code === 'string' && errShape.code) || `http_${response.status}`;
 

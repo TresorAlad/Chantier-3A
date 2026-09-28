@@ -84,6 +84,16 @@ function mapProduct(tt: TicketType, currency: string): BilletterieProduct {
     return product;
 }
 
+let liveStorefrontCache: {
+    event: FestivalEvent;
+    products: BilletterieProduct[];
+} | null = null;
+
+/** Invalide le cache après changement d'environnement ou de déploiement API. */
+export function clearBilletterieStorefrontCache(): void {
+    liveStorefrontCache = null;
+}
+
 export async function loadBilletterieStorefront(): Promise<{
     event: FestivalEvent;
     products: BilletterieProduct[];
@@ -105,4 +115,39 @@ export async function loadBilletterieStorefront(): Promise<{
         throw new Error('Aucun billet disponible pour le moment.');
     }
     return { event: detail.event, products };
+}
+
+async function loadBilletterieStorefrontCached(): Promise<{
+    event: FestivalEvent;
+    products: BilletterieProduct[];
+}> {
+    if (liveStorefrontCache) return liveStorefrontCache;
+    liveStorefrontCache = await loadBilletterieStorefront();
+    return liveStorefrontCache;
+}
+
+function productMatchesCheckoutTier(product: BilletterieProduct, tier: string): boolean {
+    if (product.externalUrl) return false;
+    const passTier = product.ticketType.pass_tier?.toLowerCase();
+    return passTier === tier;
+}
+
+/**
+ * Charge l'API uniquement au checkout (pass gratuit, pass payant).
+ * La landing utilise {@link getStaticBilletterieListing} sans appel réseau.
+ */
+export async function resolveLiveCheckoutProduct(tier: 'student' | 'vip'): Promise<{
+    event: FestivalEvent;
+    product: BilletterieProduct;
+}> {
+    const data = await loadBilletterieStorefrontCached();
+    const product = data.products.find((p) => productMatchesCheckoutTier(p, tier));
+    if (!product) {
+        throw new Error(
+            tier === 'student'
+                ? 'Le Pass Festival n\'est pas disponible via l\'API pour le moment.'
+                : 'Le Pass Nexus Night n\'est pas disponible via l\'API pour le moment.',
+        );
+    }
+    return { event: data.event, product };
 }
