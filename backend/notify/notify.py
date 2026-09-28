@@ -106,10 +106,13 @@ class NotifyService:
             row = self._store.fetchone("SELECT name FROM ticket_types WHERE id = ?", (t.ticket_type_id,))
             if row is not None:
                 tt_name = row["name"] if hasattr(row, "keys") else row[0]
+            from events.passes import display_ticket_name
+
+            pass_label = display_ticket_name(tt_name) if tt_name else "Pass"
             holder_name = t.holder_name or holder
             mail_lines.append(
                 TicketEmailLine(
-                    pass_label=tt_name or "Pass",
+                    pass_label=pass_label,
                     holder_name=holder_name,
                     serial=t.serial,
                 )
@@ -117,7 +120,7 @@ class NotifyService:
             pdf = render_pass_ticket_pdf(
                 TicketImageInput(
                     event_title=ev.title,
-                    pass_label=tt_name or "Pass",
+                    pass_label=pass_label,
                     holder_name=holder_name,
                     when_label=when_label,
                     venue_line=venue,

@@ -6,6 +6,8 @@ Prices use the event currency. For FCFA (West Africa), set the event to ``XOF``:
 
 from __future__ import annotations
 
+import re
+
 PASS_TIER_STUDENT = "student"
 PASS_TIER_STANDARD = "standard"
 PASS_TIER_VIP = "vip"
@@ -15,10 +17,16 @@ ALL_PASS_TIERS = (PASS_TIER_STUDENT, PASS_TIER_STANDARD, PASS_TIER_VIP)
 ENABLED_PASS_TIERS = ALL_PASS_TIERS
 
 PASS_TIER_LABELS: dict[str, str] = {
-    PASS_TIER_STUDENT: "Pass étudiant",
+    PASS_TIER_STUDENT: "Pass Festival",
     PASS_TIER_STANDARD: "Pass standard",
-    PASS_TIER_VIP: "Pass VIP",
+    PASS_TIER_VIP: "Pass Nexus Night",
 }
+
+
+def display_ticket_name(name: str) -> str:
+    """Public label without parenthetical suffixes, e.g. '(Jour 1)'."""
+    cleaned = re.sub(r"\s*\([^)]*\)", "", (name or "").strip()).strip()
+    return cleaned or (name or "").strip() or "Pass"
 
 PASS_TIER_PRICE_MINOR: dict[str, int] = {
     PASS_TIER_STUDENT: 0,
@@ -28,7 +36,7 @@ PASS_TIER_PRICE_MINOR: dict[str, int] = {
 
 STUDENT_PASS_TICKET_TYPE_BODY: dict = {
     "name": PASS_TIER_LABELS[PASS_TIER_STUDENT],
-    "description": "Inscription étudiant·e - gratuite sur validation.",
+    "description": "Accès gratuit aux deux jours du festival.",
     "price_minor": PASS_TIER_PRICE_MINOR[PASS_TIER_STUDENT],
     "quantity_total": 0,
     "max_per_order": 1,
@@ -52,7 +60,7 @@ STANDARD_PASS_TICKET_TYPE_BODY: dict = {
 
 VIP_PASS_TICKET_TYPE_BODY: dict = {
     "name": PASS_TIER_LABELS[PASS_TIER_VIP],
-    "description": "Expérience premium Tdev Festival.",
+    "description": "Soirée exclusive Nexus : gaming, cosplay, DJ set et projections.",
     "price_minor": PASS_TIER_PRICE_MINOR[PASS_TIER_VIP],
     "quantity_total": 0,
     "max_per_order": 5,

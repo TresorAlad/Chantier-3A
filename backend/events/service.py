@@ -82,7 +82,7 @@ def ticket_type_to_json(tt: tt_repo.TicketType) -> dict:
     out: dict = {
         "id": tt.id,
         "event_id": tt.event_id,
-        "name": tt.name,
+        "name": pass_catalog.display_ticket_name(tt.name),
         "description": tt.description,
         "price_minor": tt.price_minor,
         "quantity_total": tt.quantity_total,
@@ -371,9 +371,18 @@ def ensure_festival_pass_products(st: Store, event_id: str) -> None:
             create_ticket_type(st, event_id, body)
             continue
         existing = existing_by_tier[tier]
-        expected = pass_catalog.PASS_TIER_PRICE_MINOR[tier]
-        if existing.price_minor != expected:
-            update_ticket_type(st, existing.id, {"price_minor": expected})
+        expected_price = pass_catalog.PASS_TIER_PRICE_MINOR[tier]
+        expected_name = str(body["name"]).strip()
+        expected_description = str(body.get("description") or "").strip()
+        patch: dict = {}
+        if existing.price_minor != expected_price:
+            patch["price_minor"] = expected_price
+        if pass_catalog.display_ticket_name(existing.name) != expected_name:
+            patch["name"] = expected_name
+        if expected_description and (existing.description or "").strip() != expected_description:
+            patch["description"] = expected_description
+        if patch:
+            update_ticket_type(st, existing.id, patch)
 
 
 def _validate_ticket_type_input(body: dict, *, existing: tt_repo.TicketType | None = None) -> None:

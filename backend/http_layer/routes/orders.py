@@ -14,6 +14,7 @@ from orders.service import CreateOrderInput, OrderItemInput, OrdersError
 from payments import types as pt
 from payments.manual import ManualProvider
 from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf, render_pass_ticket_png
+from events.passes import display_ticket_name
 from store.store import NotFoundError
 
 router = APIRouter(tags=["orders"])
@@ -164,7 +165,8 @@ def _guest_tickets_json(st, order_id: str) -> list[dict]:
             if row is None:
                 type_names[tt_id] = "Pass"
             else:
-                type_names[tt_id] = row["name"] if hasattr(row, "keys") else row[0]
+                raw = row["name"] if hasattr(row, "keys") else row[0]
+                type_names[tt_id] = display_ticket_name(raw)
         t["event_title"] = event_title
         t["event_venue_name"] = event_venue
         t["event_starts_at"] = event_starts
