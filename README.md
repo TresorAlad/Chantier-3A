@@ -1,6 +1,13 @@
-# Branche `feat/Backend` — Chantier 3A
+# Chantier 3A — TDEV Festival
 
-L'API billetterie (FastAPI, PostgreSQL) se trouve dans le dossier **`backend/`**.
+Branche **`main`** : API et billetterie web dans un même dépôt.
+
+| Dossier | Rôle |
+|---------|------|
+| [`backend/`](./backend/) | API billetterie (FastAPI, PostgreSQL) |
+| [`frontend-web/`](./frontend-web/) | Vitrine et billetterie (React, Vite) |
+
+## Backend
 
 ```bash
 cd backend
@@ -12,4 +19,22 @@ billetterie-api migrate
 billetterie-api serve
 ```
 
-Documentation détaillée : [backend/README.md](./backend/README.md).
+Documentation : [backend/README.md](./backend/README.md).
+
+## Frontend
+
+```bash
+cd frontend-web
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Documentation : [frontend-web/README.md](./frontend-web/README.md).
+
+## Branches de travail
+
+- `feat/Backend` — évolutions backend (`backend/` à la racine)
+- `feat/frontend-web` — évolutions front (`frontend-web/` à la racine)
+
+Dépôt : [github.com/TresorAlad/Chantier-3A](https://github.com/TresorAlad/Chantier-3A)

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Favicon thème clair : logo sombre sur fond transparent -->
+    <link id="favicon-light" rel="icon" type="image/png" href="/favicon-light.png" media="(prefers-color-scheme: light)" />
+    <!-- Favicon thème sombre : logo inversé (blanc) sur fond transparent -->
+    <link id="favicon-dark"  rel="icon" type="image/png" href="/favicon-dark.png"  media="(prefers-color-scheme: dark)" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TDEV Festival 2026 — Billetterie Officielle</title>
+    <meta name="description" content="Réservez vos billets pour le TDEV Festival 2026 : Pass Festival gratuit, Pass Nexus Night et Welcome Pack." />
+    <script>
+      // Swap actif du favicon lors d'un changement de thème OS en temps réel
+      (function () {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        function applyFavicon(dark) {
+          document.getElementById('favicon-light').disabled = dark;
+          document.getElementById('favicon-dark').disabled = !dark;
+        }
+        applyFavicon(mq.matches);
+        mq.addEventListener('change', function (e) { applyFavicon(e.matches); });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
