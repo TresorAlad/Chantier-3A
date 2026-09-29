@@ -1,0 +1,12 @@
+.venv/
+Lib/
+Scripts/
+Include/
+pyvenv.cfg
+*.egg-info/
+__pycache__/
+*.py[cod]
+.chantier3a_session_secret
+*.db
+.env
+uv.lock

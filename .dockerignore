@@ -1,0 +1,11 @@
+.venv/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.git/
+.env
+*.db
+data/
+tests/
+docs/
+.chantier3a_session_secret

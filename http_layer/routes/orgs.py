@@ -1,0 +1,193 @@
+"""Organization CRUD, members, and invite routes."""
+
+from __future__ import annotations
+
+import hashlib
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, Response
+
+from auth import rbac
+from http_layer.deps import AppState, require_user
+from http_layer.errors import json_error
+from money import currency as money
+from store import NotFoundError, orgs as orgs_repo
+from store.orgs import Org, SlugTakenError
+from store.store import new_ulid
+from store.timeutil import time_to_text
+
+router = APIRouter(prefix="/orgs", tags=["orgs"])
+invites_router = APIRouter(tags=["invites"])
+
+VALID_ROLES = {"owner", "admin", "scanner"}
+INVITE_TTL = timedelta(days=7)
+
+
+@router.post("")
+def create_org(body: dict, state: AppState = Depends(require_user)):
+    """Create org."""
+    if state.current_user is None:
+        return json_error(401, "unauthorized", "authentication required")
+    if state.config.community_mode:
+        try:
+            if orgs_repo.count_orgs(state.store) >= 1:
+                return json_error(403, "forbidden", "organisation creation is disabled in community mode")
+        except Exception:
+            pass
+    name = (body.get("name") or "").strip()
+    if not name:
+        return json_error(400, "invalid_request", "name is required")
+    slug = (body.get("slug") or "").strip() or orgs_repo.slugify(name)
+    if len(slug) < 2:
+        return json_error(400, "invalid_request", "slug is too short")
+    default_currency = (body.get("default_currency") or "").strip()
+    try:
+        if default_currency:
+            default_currency = money.normalize(default_currency)
+    except money.CurrencyError as err:
+        return json_error(400, "invalid_request", str(err))
+    now = datetime.now(timezone.utc)
+    org = Org(
+        id=new_ulid(),
+        name=name,
+        slug=slug,
+        default_currency=default_currency or "USD",
+        created_at=now,
+    )
+    try:
+        orgs_repo.create_org_with_owner(state.store, org, state.current_user.id)
+    except SlugTakenError:
+        return json_error(409, "conflict", "an organisation with that URL name already exists — pick another")
+    except money.CurrencyError as err:
+        return json_error(400, "invalid_request", str(err))
+    except Exception:
+        return json_error(500, "internal_error", "internal error")
+    return Response(
+        content=_json(
+            {
+                "org": {
+                    "id": org.id,
+                    "name": org.name,
+                    "slug": org.slug,
+                    "default_currency": org.default_currency,
+                    "role": rbac.ROLE_OWNER,
+                }
+            }
+        ),
+        media_type="application/json",
+        status_code=201,
+    )
+
+
+@router.get("/{org_id}/events")
+def list_org_events(org_id: str, state: AppState = Depends(require_user)):
+    """List org events."""
+    from events import service as events_svc
+
+    if not rbac.can_manage_org(state.store, state.current_user.id, org_id, rbac.ROLE_SCANNER):
+        return json_error(403, "forbidden", "you are not a member of this org")
+    events = events_svc.list_by_org(state.store, org_id)
+    return {"events": events}
+
+
+@router.get("/{org_id}/members")
+def list_members(org_id: str, state: AppState = Depends(require_user)):
+    """List members."""
+    if not rbac.can_manage_org(state.store, state.current_user.id, org_id, rbac.ROLE_ADMIN):
+        return json_error(403, "forbidden", "you are not an admin/owner of this org")
+    members = orgs_repo.list_org_members(state.store, org_id)
+    return {
+        "members": [
+            {"user_id": m.user_id, "name": m.name, "email": m.email, "role": m.role} for m in members
+        ]
+    }
+
+
+@router.get("/{org_id}/invites")
+def list_invites(org_id: str, state: AppState = Depends(require_user)):
+    """List invites."""
+    if not rbac.can_manage_org(state.store, state.current_user.id, org_id, rbac.ROLE_ADMIN):
+        return json_error(403, "forbidden", "you are not an admin/owner of this org")
+    invites = orgs_repo.list_pending_org_invites(state.store, org_id)
+    return {
+        "invites": [
+            {
+                "id": i.id,
+                "email": i.email,
+                "role": i.role,
+                "expires_at": time_to_text(i.expires_at),
+                "created_at": time_to_text(i.created_at),
+            }
+            for i in invites
+        ]
+    }
+
+
+@router.post("/{org_id}/invites")
+def create_invite(org_id: str, body: dict, state: AppState = Depends(require_user)):
+    """Create invite."""
+    if not rbac.can_manage_org(state.store, state.current_user.id, org_id, rbac.ROLE_ADMIN):
+        return json_error(403, "forbidden", "you are not an admin/owner of this org")
+    email = (body.get("email") or "").strip().lower()
+    role = (body.get("role") or "").strip()
+    if not email or role not in VALID_ROLES:
+        return json_error(400, "invalid_request", "email and a valid role (owner, admin, scanner) are required")
+    try:
+        inviter_role = orgs_repo.get_org_member_role(state.store, org_id, state.current_user.id)
+    except NotFoundError:
+        return json_error(403, "forbidden", "you are not an admin/owner of this org")
+    if rbac._RANK.get(role, 0) > rbac._RANK.get(inviter_role, 0):
+        return json_error(403, "forbidden", "you cannot invite someone at a role higher than your own")
+    import base64
+    import secrets
+
+    raw = secrets.token_bytes(32)
+    token = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+    now = datetime.now(timezone.utc)
+    inv = orgs_repo.OrgInvite(
+        id=new_ulid(),
+        org_id=org_id,
+        email=email,
+        role=role,
+        token_hash=token_hash,
+        expires_at=now + INVITE_TTL,
+        created_at=now,
+    )
+    orgs_repo.create_org_invite(state.store, inv)
+    return Response(
+        content=_json({"invite_id": inv.id, "token": token, "expires_at": time_to_text(inv.expires_at)}),
+        media_type="application/json",
+        status_code=201,
+    )
+
+
+@invites_router.post("/invites/accept")
+def accept_invite(body: dict, state: AppState = Depends(require_user)):
+    """Accept invite."""
+    token = (body.get("token") or "").strip()
+    if not token:
+        return json_error(400, "invalid_request", "token is required")
+    token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+    try:
+        inv = orgs_repo.get_org_invite_by_token_hash(state.store, token_hash)
+    except NotFoundError:
+        return json_error(400, "invalid_request", "invite is invalid, expired, or already used")
+    now = datetime.now(timezone.utc)
+    if inv.accepted_at is not None or inv.expires_at <= now:
+        return json_error(400, "invalid_request", "invite is invalid, expired, or already used")
+    if state.current_user.email.lower() != inv.email.lower():
+        return json_error(403, "forbidden", "this invite was issued to a different email address")
+    try:
+        orgs_repo.add_org_member(state.store, inv.org_id, state.current_user.id, inv.role, now)
+        orgs_repo.mark_invite_accepted(state.store, inv.id, now)
+    except Exception:
+        return json_error(500, "internal_error", "internal error")
+    return {"org_id": inv.org_id, "role": inv.role}
+
+
+def _json(obj: dict) -> str:
+    """Internal: json."""
+    import json
+
+    return json.dumps(obj)
