@@ -94,6 +94,25 @@ Le backend implémente désormais un flux d’authentification basé sur des coo
 - Revoke côté logout : le refresh token est invalidé et les cookies sont supprimés.
 - OAuth Google : le callback produit le même type d’authentification que le login local, avec flux de cookies cohérent.
 
+### Limitation de débit
+
+Les routes d’authentification suivantes sont limitées par adresse IP. Une requête
+qui dépasse le plafond reçoit une réponse `429 rate_limited` avec un en-tête
+`Retry-After` indiquant le délai avant une nouvelle tentative :
+
+| Route | Limite |
+|-------|--------|
+| `POST /api/v1/auth/signup` | 10 requêtes par heure |
+| `POST /api/v1/auth/login` | 10 requêtes par minute |
+| `POST /api/v1/auth/refresh` | 30 requêtes par minute |
+| `POST /api/v1/auth/logout` | 30 requêtes par minute |
+| `GET /api/v1/auth/google` | 10 requêtes par minute |
+| `GET /api/v1/auth/google/callback` | 30 requêtes par minute |
+
+Les compteurs sont conservés en mémoire par processus et ne sont pas partagés
+entre plusieurs instances de l’API. Les routes `password-reset`,
+`password-update` et `signup-with-invite` ne sont pas incluses dans ces règles.
+
 ### Endpoints d’authentification
 
 Les routes principales sont les suivantes :

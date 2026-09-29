@@ -14,7 +14,10 @@ from http_layer.deps import AppState, get_app_state
 from http_layer.errors import json_error
 from bootstrap import AppServices, build_services
 from http_layer.deps import _Unauthorized, unauthorized_handler
-from http_layer.middleware.rate_limit import ScanRateLimitMiddleware
+from http_layer.middleware.rate_limit import (
+    AuthRateLimitMiddleware,
+    ScanRateLimitMiddleware,
+)
 from starlette.middleware.sessions import SessionMiddleware
 from http_layer.routes import (
     auth,
@@ -115,6 +118,7 @@ def create_app(
     api.include_router(extras.router)
     api.include_router(extras.images_router)
     app.add_middleware(ScanRateLimitMiddleware)
+    app.add_middleware(AuthRateLimitMiddleware)
     stubs.register_stubs(api)
     app.include_router(api)
 

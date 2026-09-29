@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import math
 from collections import defaultdict, deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,7 +11,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from http_layer.errors import json_error
-
 
 class ScanRateLimitMiddleware(BaseHTTPMiddleware):
     """Limite simple par IP sur les routes /api/scan*."""
@@ -35,4 +35,41 @@ class ScanRateLimitMiddleware(BaseHTTPMiddleware):
         if len(q) >= self._max:
             return json_error(429, "rate_limited", "too many scan requests")
         q.append(now)
+        return await call_next(request)
+
+class AuthRateLimitMiddleware(BaseHTTPMiddleware):
+    RULES = {
+        ("POST", "/api/v1/auth/signup"): (10, 3600),
+        ("POST", "/api/v1/auth/login"): (10, 60),
+        ("POST", "/api/v1/auth/refresh"): (30, 60),
+        ("POST", "/api/v1/auth/logout"): (30, 60),
+        ("GET", "/api/v1/auth/google"): (10, 60),
+        ("GET", "/api/v1/auth/google/callback"): (30, 60),
+    }
+
+    def __init__(self, app) -> None:
+        super().__init__(app)
+        self._hits: dict[tuple[str, str, str], deque[float]] = defaultdict(deque)
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        rule = self.RULES.get((request.method, request.url.path))
+        if rule is None:
+            return await call_next(request)
+
+        max_requests, window_seconds = rule
+        ip = request.client.host if request.client else "unknown"
+        key = (ip, request.method, request.url.path)
+
+        now = time.monotonic()
+        hits = self._hits[key]
+        while hits and now - hits[0] >= window_seconds:
+            hits.popleft()
+
+        if len(hits) >= max_requests:
+            retry_after = max(1, math.ceil(window_seconds - (now - hits[0])))
+            response = json_error(429, "rate_limited", "too many authentication requests")
+            response.headers["Retry-After"] = str(retry_after)
+            return response
+
+        hits.append(now)
         return await call_next(request)
