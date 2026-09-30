@@ -42,6 +42,7 @@ include = [
     "events*",
     "http_layer*",
     "money*",
+    "migrations*",
     "notify*",
     "orders*",
     "payments*",
@@ -49,3 +50,7 @@ include = [
     "store*",
     "tickets*",
 ]
+
+[tool.setuptools.package-data]
+migrations = ["*.sql"]
+notify = ["assets/**", "previews/**"]
