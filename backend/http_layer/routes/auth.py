@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from auth import service as auth_svc
 from http_layer.deps import AppState, get_app_state
 from http_layer.errors import json_error
-from http_layer.session import clear_session_cookies, set_session_cookies
+from http_layer.session import clear_jwt_cookies, set_jwt_cookies, set_refresh_cookie
 from store.users import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -76,10 +77,21 @@ def signup(
     except Exception:
         return json_error(500, "internal_error", "internal error")
 
-    token, expires = auth_svc.create_session(state.store, user.id)
-    payload = {"user": _user_view(user), "token": token}
+    access_token, refresh_token, expires = auth_svc.issue_auth_tokens(
+        state.store,
+        state.config,
+        user,
+        state.config.access_token_expire_minutes,
+        auth_method="password_hash",
+    )
+    payload = {
+        "user": _user_view(user),
+        "token": access_token,
+        "refresh_token": refresh_token,
+    }
     resp = Response(content=json.dumps(payload), media_type="application/json")
-    set_session_cookies(resp, token, expires, state.config.session_secret, _secure_request(request))
+    set_jwt_cookies(resp, access_token, expires, state.config.session_secret, _secure_request(request))
+    set_refresh_cookie(resp, refresh_token, datetime.now(timezone.utc) + auth_svc.SESSION_TTL, _secure_request(request))
     return resp
 
 
@@ -105,10 +117,21 @@ def signup_with_invite(
     except Exception:
         return json_error(500, "internal_error", "internal error")
 
-    token, expires = auth_svc.create_session(state.store, user.id)
-    payload = {"user": _user_view(user), "token": token}
+    access_token, refresh_token, expires = auth_svc.issue_auth_tokens(
+        state.store,
+        state.config,
+        user,
+        state.config.access_token_expire_minutes,
+        auth_method="password_hash",
+    )
+    payload = {
+        "user": _user_view(user),
+        "token": access_token,
+        "refresh_token": refresh_token,
+    }
     resp = Response(content=json.dumps(payload), media_type="application/json")
-    set_session_cookies(resp, token, expires, state.config.session_secret, _secure_request(request))
+    set_jwt_cookies(resp, access_token, expires, state.config.session_secret, _secure_request(request))
+    set_refresh_cookie(resp, refresh_token, datetime.now(timezone.utc) + auth_svc.SESSION_TTL, _secure_request(request))
     return resp
 
 
@@ -128,10 +151,49 @@ def login(
     except Exception:
         return json_error(500, "internal_error", "internal error")
 
-    token, expires = auth_svc.create_session(state.store, user.id)
-    payload = {"user": _user_view(user), "token": token}
+    access_token, refresh_token, expires = auth_svc.issue_auth_tokens(
+        state.store,
+        state.config,
+        user,
+        state.config.access_token_expire_minutes,
+        auth_method="password_hash",
+    )
+    payload = {
+        "user": _user_view(user),
+        "token": access_token,
+        "refresh_token": refresh_token,
+    }
     resp = Response(content=json.dumps(payload), media_type="application/json")
-    set_session_cookies(resp, token, expires, state.config.session_secret, _secure_request(request))
+    set_jwt_cookies(resp, access_token, expires, state.config.session_secret, _secure_request(request))
+    set_refresh_cookie(resp, refresh_token, datetime.now(timezone.utc) + auth_svc.SESSION_TTL, _secure_request(request))
+    return resp
+
+
+@router.post("/refresh")
+def refresh(
+    request: Request,
+    state: AppState = Depends(get_app_state),
+) -> Response:
+    """Swap a valid refresh token for a new access token pair."""
+    refresh_token = request.headers.get("Authorization", "")
+    if refresh_token.startswith("Bearer "):
+        refresh_token = refresh_token[7:].strip()
+    else:
+        refresh_token = request.cookies.get("chantier3a_refresh", "")
+    if not refresh_token:
+        return json_error(401, "unauthorized", "refresh token required")
+    try:
+        access_token, new_refresh_token, expires = auth_svc.refresh_access_token(
+            state.store,
+            state.config,
+            refresh_token,
+        )
+    except auth_svc.SessionInvalid:
+        return json_error(401, "unauthorized", "refresh token invalid or expired")
+    payload = {"token": access_token, "refresh_token": new_refresh_token}
+    resp = Response(content=json.dumps(payload), media_type="application/json")
+    set_jwt_cookies(resp, access_token, expires, state.config.session_secret, _secure_request(request))
+    set_refresh_cookie(resp, new_refresh_token, datetime.now(timezone.utc) + auth_svc.SESSION_TTL, _secure_request(request))
     return resp
 
 
@@ -141,10 +203,12 @@ def logout(
     state: AppState = Depends(get_app_state),
 ) -> Response:
     """Delete the session row for the given bearer token."""
+    if state.current_user is not None:
+        auth_svc.user_store.clear_user_refresh_token(state.store, state.current_user.id)
     if state.session_token:
         auth_svc.logout(state.store, state.session_token)
     resp = Response(status_code=204)
-    clear_session_cookies(resp, _secure_request(request))
+    clear_jwt_cookies(resp, _secure_request(request))
     return resp
 
 

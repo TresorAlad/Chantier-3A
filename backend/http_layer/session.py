@@ -11,6 +11,8 @@ from fastapi import Request, Response
 SESSION_COOKIE = "chantier3a_session"
 CSRF_COOKIE = "chantier3a_csrf"
 CSRF_HEADER = "X-CSRF-Token"
+JWT_COOKIE = "chantier3a_jwt"
+REFRESH_COOKIE = "chantier3a_refresh"
 
 
 def csrf_token_for(session_token: str, secret: str) -> str:
@@ -24,6 +26,9 @@ def extract_token(request: Request) -> tuple[str, bool]:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer ") and auth[7:].strip():
         return auth[7:].strip(), False
+    token = request.cookies.get(JWT_COOKIE, "")
+    if token:
+        return token, True
     token = request.cookies.get(SESSION_COOKIE, "")
     if token:
         return token, True
@@ -55,6 +60,50 @@ def set_session_cookies(response: Response, token: str, expires: datetime, secre
         path="/",
     )
 
+def set_jwt_cookies(response: Response, jwt_token: str, expires: datetime, csrf_secret: str, secure: bool) -> None:
+    max_age = int((expires - datetime.now(timezone.utc)).total_seconds())
+    if max_age < 0:
+        max_age = 0
+
+    response.set_cookie(
+        JWT_COOKIE,
+        jwt_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf_token_for(jwt_token, csrf_secret),
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
+
+
+def set_refresh_cookie(response: Response, refresh_token: str, expires: datetime, secure: bool) -> None:
+    max_age = int((expires - datetime.now(timezone.utc)).total_seconds())
+    if max_age < 0:
+        max_age = 0
+    response.set_cookie(
+        REFRESH_COOKIE,
+        refresh_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
+
+
+def clear_jwt_cookies(response: Response, secure: bool) -> None:
+    response.delete_cookie(JWT_COOKIE, path="/", secure=secure, samesite="lax")
+    response.delete_cookie(REFRESH_COOKIE, path="/", secure=secure, samesite="lax")
+    response.delete_cookie(CSRF_COOKIE, path="/", secure=secure, samesite="lax")
 
 def clear_session_cookies(response: Response, secure: bool) -> None:
     """Remove session and CSRF cookies on logout."""
