@@ -45,6 +45,7 @@ ErrPaymentUnavailable = OrdersError("orders: payment provider unavailable, pleas
 ErrOrderNotSettleable = OrdersError("orders: order cannot be settled from its current status")
 ErrOrderNotPending = OrdersError("orders: order is not pending")
 ErrRegistrationIncomplete = OrdersError("orders: incomplete pass registration")
+ErrDuplicateBuyerEmail = OrdersError("orders: buyer email already registered for this event")
 
 
 @dataclass
@@ -149,6 +150,10 @@ class OrdersService:
             )
         except reg.RegistrationError as err:
             raise ErrRegistrationIncomplete from err
+        if orders_repo.has_active_order_for_event_email(
+            self._store, inp.event_id, registration.email
+        ):
+            raise ErrDuplicateBuyerEmail
         holder_name = f"{registration.first_name} {registration.last_name}".strip() or inp.buyer_name.strip()
         lines: list[orders_repo.OrderLine] = []
         subtotal = 0

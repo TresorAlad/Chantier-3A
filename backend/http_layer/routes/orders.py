@@ -205,6 +205,14 @@ def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)
     except NotFoundError:
         return json_error(404, "not_found", "event or ticket type not found")
     except OrdersError as err:
+        from orders.service import ErrDuplicateBuyerEmail
+
+        if err is ErrDuplicateBuyerEmail:
+            return json_error(
+                409,
+                "duplicate_registration",
+                "Cette adresse e-mail est déjà inscrite pour cet événement.",
+            )
         return json_error(400, "invalid_request", str(err))
     except Exception:
         return json_error(500, "internal_error", "internal error")

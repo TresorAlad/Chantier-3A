@@ -138,6 +138,23 @@ def list_orders_for_event(st: Store, event_id: str) -> list[Order]:
     return [_scan_order(r) for r in rows]
 
 
+def has_active_order_for_event_email(st: Store, event_id: str, email: str) -> bool:
+    """True if this email already has a pending or paid order on the event."""
+    normalized = email.strip().lower()
+    if not normalized:
+        return False
+    row = st.fetchone(
+        """
+        SELECT id FROM orders
+        WHERE event_id = ? AND lower(buyer_email) = ?
+          AND status IN ('pending', 'paid')
+        LIMIT 1
+        """,
+        (event_id, normalized),
+    )
+    return row is not None
+
+
 def _tx_exec(st: Store, conn, query: str, args: tuple) -> int:
     """Internal: tx exec."""
     q = rebind_query(query)

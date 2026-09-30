@@ -92,3 +92,28 @@ def test_free_student_pass_checkout(client: TestClient, demo_store):
     assert reg["school_name"] == "Universite Cheikh Anta Diop"
     assert reg["motivation"]
     assert reg["wish"]
+
+
+def test_student_pass_rejects_duplicate_email(client: TestClient, demo_store):
+    """Same email cannot register twice on the same event."""
+    store, _cfg, _services, _app = demo_store
+    fx = seed_published_event(store)
+    tt = events_svc.create_ticket_type(store, fx["event_id"], STUDENT_PASS_TICKET_TYPE_BODY)
+    payload = {
+        "event_id": fx["event_id"],
+        "items": [{"ticket_type_id": tt["id"], "quantity": 1}],
+        "buyer": {
+            "email": "dup@example.com",
+            "first_name": "Awa",
+            "last_name": "Diallo",
+            "motivation": "Motivation suffisante.",
+            "wish": "Attentes claires.",
+        },
+    }
+    first = client.post("/api/orders", json=payload)
+    assert first.status_code == 201, first.text
+    client.post("/api/payments/verify", json={"reference": first.json()["order"]["id"]})
+
+    second = client.post("/api/orders", json=payload)
+    assert second.status_code == 409, second.text
+    assert second.json()["error"]["code"] == "duplicate_registration"

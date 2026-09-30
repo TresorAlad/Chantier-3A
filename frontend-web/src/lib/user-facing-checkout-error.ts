@@ -10,6 +10,15 @@ export interface CheckoutFailureCopy {
 /** Messages visiteur pour les popups d'échec (sans instructions dev). */
 export function checkoutFailureCopy(err: unknown): CheckoutFailureCopy {
     if (err instanceof ApiError) {
+        if (err.code === 'duplicate_registration') {
+            return {
+                title: 'Inscription déjà enregistrée',
+                body:
+                    err.message.trim() ||
+                    'Cette adresse e-mail a déjà été utilisée pour une inscription à cet événement.',
+            };
+        }
+
         const infra =
             err.code === 'network_error' ||
             err.status === 0 ||
