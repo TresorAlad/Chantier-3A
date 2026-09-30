@@ -49,7 +49,9 @@ def _applied_at() -> str:
 
 def migrate_postgres(database_url: str) -> list[int]:
     """Apply pending SQL migrations to PostgreSQL."""
-    conn = psycopg.connect(database_url)
+    # autocommit: conn.transaction() must be a real transaction, not a savepoint
+    # inside an implicit one that close() would roll back.
+    conn = psycopg.connect(database_url, autocommit=True)
     try:
         _ensure_schema_migrations_postgres(conn)
         for name in _migration_files(MIGRATIONS_DIR):
