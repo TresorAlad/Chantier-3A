@@ -7,7 +7,16 @@ RUN groupadd --gid 10001 app && useradd --uid 10001 --gid 10001 --create-home --
 WORKDIR /app
 
 COPY backend/pyproject.toml backend/README.md ./
-COPY backend/auth backend/events backend/http_layer backend/money backend/notify backend/orders backend/payments backend/scan backend/store backend/tickets ./
+COPY backend/auth ./auth/
+COPY backend/events ./events/
+COPY backend/http_layer ./http_layer/
+COPY backend/money ./money/
+COPY backend/notify ./notify/
+COPY backend/orders ./orders/
+COPY backend/payments ./payments/
+COPY backend/scan ./scan/
+COPY backend/store ./store/
+COPY backend/tickets ./tickets/
 COPY backend/cli.py backend/config.py backend/bootstrap.py backend/spa.py backend/__init__.py backend/__main__.py ./
 COPY backend/migrations ./migrations
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

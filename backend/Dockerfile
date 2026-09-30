@@ -12,7 +12,16 @@ RUN groupadd --gid 10001 app && useradd --uid 10001 --gid 10001 --create-home --
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
-COPY auth events http_layer money notify orders payments scan store tickets ./
+COPY auth ./auth/
+COPY events ./events/
+COPY http_layer ./http_layer/
+COPY money ./money/
+COPY notify ./notify/
+COPY orders ./orders/
+COPY payments ./payments/
+COPY scan ./scan/
+COPY store ./store/
+COPY tickets ./tickets/
 COPY cli.py config.py bootstrap.py spa.py __init__.py __main__.py ./
 COPY migrations ./migrations
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
