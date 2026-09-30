@@ -43,7 +43,12 @@ const DEFAULT_BASE = '/api';
 function resolveBaseUrl() {
     const configured = import.meta.env.VITE_API_URL;
     if (configured && configured.trim()) {
-        return configured.replace(/\/+$/, '');
+        let base = configured.trim().replace(/\/+$/, '');
+        // Production misconfig: Render/Vercel env often omits the /api suffix.
+        if (/^https?:\/\//i.test(base) && !/\/api$/i.test(base)) {
+            base = `${base}/api`;
+        }
+        return base;
     }
     return DEFAULT_BASE;
 }
