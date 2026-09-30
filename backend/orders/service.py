@@ -41,6 +41,7 @@ ErrEventNotPublished = OrdersError("orders: event is not published")
 ErrSoldOut = OrdersError("orders: sold out")
 ErrProviderRequired = OrdersError("orders: a payment provider must be specified")
 ErrUnknownProvider = OrdersError("orders: unknown payment provider")
+ErrPaymentUnavailable = OrdersError("orders: payment provider unavailable, please retry")
 ErrOrderNotSettleable = OrdersError("orders: order cannot be settled from its current status")
 ErrOrderNotPending = OrdersError("orders: order is not pending")
 ErrRegistrationIncomplete = OrdersError("orders: incomplete pass registration")
@@ -203,17 +204,22 @@ class OrdersService:
             raise ErrSoldOut from err
         except NotFoundError as err:
             raise ErrTicketTypeNotFound from err
-        charge = provider.begin(
-            pt.Order(
-                reference=order_id,
-                event_id=inp.event_id,
-                buyer_email=registration.email,
-                buyer_name=holder_name,
-                amount_minor=subtotal,
-                currency=currency,
-                callback_url=inp.callback_url,
+        try:
+            charge = provider.begin(
+                pt.Order(
+                    reference=order_id,
+                    event_id=inp.event_id,
+                    buyer_email=registration.email,
+                    buyer_name=holder_name,
+                    amount_minor=subtotal,
+                    currency=currency,
+                    callback_url=inp.callback_url,
+                )
             )
-        )
+        except Exception as err:
+            # Do not keep stock reserved by an order that can never be paid.
+            orders_repo.cancel_order_release_inventory(self._store, order_id)
+            raise ErrPaymentUnavailable from err
         view = self._to_view(ord_row, order_items)
         return view, charge
 
