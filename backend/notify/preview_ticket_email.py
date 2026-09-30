@@ -21,7 +21,7 @@ def sample_context() -> TicketEmailContext:
         event_title="Tdev Festival 2026",
         when_label="samedi, 21 nov. | 9:00 am",
         venue_line="Lomé Convention Center, Lomé, Togo",
-        billet_url="https://festival.ourtdev.com/order/01EXAMPLE/billet?email=awa.mensah%40example.com",
+        billet_url="https://festival.ourtdev.com/api/orders/01EXAMPLE/guest/ticket.pdf?email=awa.mensah%40example.com",
         tickets=(
             TicketEmailLine(
                 pass_label="Pass Standard",
@@ -169,10 +169,33 @@ def write_previews(ctx: TicketEmailContext | None = None) -> tuple[Path, Path]:
     return shell_path, body_path
 
 
+def write_ticket_samples() -> tuple[Path, Path]:
+    """Render the sample pass as PNG and PDF (same renderer as the real attachment)."""
+    from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf, render_pass_ticket_png
+
+    inp = TicketImageInput(
+        event_title="Tdev Festival 2026",
+        pass_label="Pass Standard",
+        holder_name="Awa Mensah",
+        when_label="samedi, 21 nov. | 9:00 am",
+        venue_line="Lomé Convention Center, Lomé, Togo",
+        serial="TDEV-2026-0042",
+        capability="exemple-de-capability-non-valide",
+    )
+    PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+    png_path = PREVIEWS_DIR / "billet-exemple.png"
+    pdf_path = PREVIEWS_DIR / "billet-exemple.pdf"
+    png_path.write_bytes(render_pass_ticket_png(inp))
+    pdf_path.write_bytes(render_pass_ticket_pdf(inp))
+    return png_path, pdf_path
+
+
 def main() -> None:
     shell, body = write_previews()
     print(f"wrote {shell}")
     print(f"wrote {body}")
+    for path in write_ticket_samples():
+        print(f"wrote {path}")
 
 
 if __name__ == "__main__":

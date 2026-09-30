@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+dev = ["pytest>=8.0.0", "zxing-cpp>=2.2.0"]
 
 [project.scripts]
 billetterie-api = "cli:main"
