@@ -2,7 +2,74 @@
 
 Guide pour déployer le backend FastAPI (`backend/`) sur [Render](https://render.com) avec PostgreSQL et stockage persistant pour les médias et le coffre de clés.
 
-## Option recommandée : Blueprint
+## Option recommandée : projet Render (Production)
+
+Dans le dashboard : **My Workspace** > votre projet (ex. `billeterie`) > **Production** > **New** (ou **Add service**). Créer les ressources **dans cet ordre**.
+
+### 1. Postgres
+
+Choisir la carte **Postgres**.
+
+| Champ | Valeur |
+|-------|--------|
+| Name | ex. `billeterie-db` |
+| Database / User | laisser ou `chantier3a` |
+| Region | même région que l'API (ex. Frankfurt) |
+| Plan | selon budget |
+
+Une fois créé : onglet **Connect** > copier l'**Internal Database URL** (pour le Web Service sur Render, pas l'URL externe).
+
+### 2. Web Service (API)
+
+Retourner au projet > **New** > **Web Services**.
+
+| Champ | Valeur |
+|-------|--------|
+| Source | repo GitHub `Chantier-3A`, branche `main` |
+| Language | **Docker** |
+| Root Directory | `backend` |
+| Dockerfile | `Dockerfile` (défaut) |
+| Name | ex. `billeterie-api` |
+| Health Check Path | `/healthz` |
+| Instance type | Starter ou plus |
+
+**Disque persistant** (Settings ou à la création si proposé) :
+
+- Mount path : `/srv/data`
+- Taille : 1 Go minimum
+
+**Environment** (minimum) :
+
+```env
+CHANTIER3A_PYENV=production
+CHANTIER3A_DATABASE_URL=<Internal Database URL du Postgres du projet>
+CHANTIER3A_DATA_DIR=/srv/data
+CHANTIER3A_MEDIA_DIR=/srv/data/media
+CHANTIER3A_BASE_URL=https://<URL publique du front ou .onrender.com si test>
+CHANTIER3A_KEY_PASSPHRASE=<12+ caractères, à garder>
+CHANTIER3A_SESSION_SECRET=<générer>
+CHANTIER3A_SECRET_KEY=<générer>
+CHANTIER3A_OAUTH_STATE_SECRET=<générer>
+CHANTIER3A_PAYMENT_PROVIDERS=manual
+CHANTIER3A_PUBLIC_SIGNUP=0
+```
+
+Render injecte **`PORT`** ; ne pas définir `CHANTIER3A_ADDR`. Au premier deploy : migrations puis `serve` (entrypoint Docker).
+
+Tester : `https://<billeterie-api>.onrender.com/healthz`.
+
+**Build Docker échoue (`Dockerfile: no such file or directory`)** : Render cherche le Dockerfile à la **racine du dépôt** si **Root Directory** est vide. Corriger l’un des deux :
+
+- **Root Directory** = `backend`, Dockerfile = `Dockerfile`, ou
+- laisser la racine vide et utiliser le `Dockerfile` à la racine du monorepo (copie de l’image `backend/`).
+
+### 3. Suite (optionnel)
+
+SMTP, FedaPay, Google OAuth : voir tableau ci-dessous et [`PRODUCTION-FEDAPAY.md`](PRODUCTION-FEDAPAY.md).
+
+---
+
+## Option alternative : Blueprint
 
 À la racine du dépôt, le fichier [`render.yaml`](../../render.yaml) déclare :
 
