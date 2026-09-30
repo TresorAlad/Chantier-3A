@@ -86,7 +86,7 @@ Détail de votre pass
 {pdf_line}
 Présentez le QR code du PDF à l'entrée (impression ou écran de téléphone).
 
-Vous pouvez aussi ouvrir ou retélécharger votre billet en ligne :
+Vous pouvez aussi retélécharger votre billet en PDF :
 {ctx.billet_url.strip()}
 
 Conseils
@@ -171,7 +171,7 @@ L'équipe T-Dev Festival
                 Conservez cet e-mail et la pièce jointe jusqu'à la fin de l'événement.
               </p>
               <p style="margin:0 0 24px;text-align:center;">
-                <a href="{_esc(ctx.billet_url.strip())}" style="display:inline-block;background:#047857;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:999px;font-size:15px;font-weight:600;">Ouvrir mon billet en ligne</a>
+                <a href="{_esc(ctx.billet_url.strip())}" style="display:inline-block;background:#047857;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:999px;font-size:15px;font-weight:600;">Télécharger mon billet</a>
               </p>
               <p style="margin:0;font-size:12px;line-height:1.5;color:#737373;text-align:center;">
                 Pièce jointe : billet PDF avec QR code.

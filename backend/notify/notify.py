@@ -87,7 +87,8 @@ class NotifyService:
         from store import tickets as tickets_repo
 
         base = self._config.base_url.rstrip("/")
-        billet_url = f"{base}/order/{ord_row.id}/billet?email={quote(ord_row.buyer_email)}"
+        # The web app has no ticket page; link straight to the guest PDF download endpoint.
+        billet_url = f"{base}/api/orders/{ord_row.id}/guest/ticket.pdf?email={quote(ord_row.buyer_email, safe='')}"
         ticket_rows = tickets_repo.list_tickets_for_order(self._store, order_id)
 
         holder = f"{getattr(ord_row, 'buyer_first_name', '')} {getattr(ord_row, 'buyer_last_name', '')}".strip()
