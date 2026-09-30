@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 
@@ -14,40 +12,11 @@ from orders.service import CreateOrderInput, OrderItemInput, OrdersError
 from payments import types as pt
 from payments.manual import ManualProvider
 from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf, render_pass_ticket_png
+from events.festival_schedule import format_event_when_label
 from events.passes import display_ticket_name
 from store.store import NotFoundError
 
 router = APIRouter(tags=["orders"])
-
-_FR_WEEKDAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
-_FR_MONTHS = (
-    "janv.",
-    "févr.",
-    "mars",
-    "avr.",
-    "mai",
-    "juin",
-    "juil.",
-    "août",
-    "sept.",
-    "oct.",
-    "nov.",
-    "déc.",
-)
-
-
-def _format_when_label(iso: str | None) -> str | None:
-    if not iso:
-        return None
-    try:
-        raw = iso.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(raw)
-        wd = _FR_WEEKDAYS[dt.weekday()]
-        month = _FR_MONTHS[dt.month - 1]
-        hour = dt.strftime("%I:%M %p").lstrip("0").lower()
-        return f"{wd}, {dt.day} {month} | {hour}"
-    except ValueError:
-        return None
 
 
 def _venue_line(venue: str, address: str) -> str:
@@ -150,11 +119,15 @@ def _guest_tickets_json(st, order_id: str) -> list[dict]:
     event_title = ""
     event_venue = ""
     event_starts = ""
+    event_ends = ""
+    event_tz = ""
     try:
         ev = events_repo.get_event_by_id(st, event_id)
         event_title = ev.title
         event_venue = ev.venue_name or ""
         event_starts = ev.starts_at.isoformat().replace("+00:00", "Z")
+        event_ends = ev.ends_at.isoformat().replace("+00:00", "Z")
+        event_tz = ev.timezone or ""
     except NotFoundError:
         pass
     type_names: dict[str, str] = {}
@@ -170,8 +143,18 @@ def _guest_tickets_json(st, order_id: str) -> list[dict]:
         t["event_title"] = event_title
         t["event_venue_name"] = event_venue
         t["event_starts_at"] = event_starts
+        t["event_ends_at"] = event_ends
+        t["event_timezone"] = event_tz
         t["ticket_type_name"] = type_names[tt_id]
     return tickets
+
+
+def _ticket_when_label(picked: dict) -> str | None:
+    return format_event_when_label(
+        picked.get("event_starts_at"),
+        ends_at_iso=picked.get("event_ends_at"),
+        tz_name=picked.get("event_timezone") or None,
+    )
 
 
 @router.post("/orders", status_code=201)
@@ -318,7 +301,7 @@ def guest_ticket_png(
             event_title=picked.get("event_title") or "Tdev Festival 2026",
             pass_label=picked.get("ticket_type_name") or "Pass",
             holder_name=holder,
-            when_label=_format_when_label(picked.get("event_starts_at")),
+            when_label=_ticket_when_label(picked),
             venue_line=_venue_line(venue, addr),
             serial=picked["serial"],
             capability=picked["capability"],
@@ -383,7 +366,7 @@ def guest_ticket_pdf(
             event_title=picked.get("event_title") or "Tdev Festival 2026",
             pass_label=picked.get("ticket_type_name") or "Pass",
             holder_name=holder,
-            when_label=_format_when_label(picked.get("event_starts_at")),
+            when_label=_ticket_when_label(picked),
             venue_line=_venue_line(venue, addr),
             serial=picked["serial"],
             capability=picked["capability"],

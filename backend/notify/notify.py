@@ -9,44 +9,13 @@ from urllib.parse import quote
 from email.message import EmailMessage
 
 from config import Config
+from events.festival_schedule import format_event_when_label
 from notify.ticket_email import TicketEmailContext, TicketEmailLine, build_ticket_email
 from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf
 from store import events_repo, orders as orders_repo
 from store.store import Store
 
 log = logging.getLogger("chantier3a.notify")
-
-_FR_WEEKDAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
-_FR_MONTHS = (
-    "janv.",
-    "févr.",
-    "mars",
-    "avr.",
-    "mai",
-    "juin",
-    "juil.",
-    "août",
-    "sept.",
-    "oct.",
-    "nov.",
-    "déc.",
-)
-
-
-def _format_when_label(iso: str | None) -> str | None:
-    from datetime import datetime
-
-    if not iso:
-        return None
-    try:
-        raw = iso.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(raw)
-        wd = _FR_WEEKDAYS[dt.weekday()]
-        month = _FR_MONTHS[dt.month - 1]
-        hour = dt.strftime("%I:%M %p").lstrip("0").lower()
-        return f"{wd}, {dt.day} {month} | {hour}"
-    except ValueError:
-        return None
 
 
 def _venue_line(venue: str, address: str) -> str:
@@ -95,7 +64,11 @@ class NotifyService:
         if not holder:
             holder = ord_row.buyer_name
 
-        when_label = _format_when_label(ev.starts_at.isoformat().replace("+00:00", "Z"))
+        when_label = format_event_when_label(
+            ev.starts_at.isoformat().replace("+00:00", "Z"),
+            ends_at_iso=ev.ends_at.isoformat().replace("+00:00", "Z"),
+            tz_name=ev.timezone or None,
+        )
         venue = _venue_line(ev.venue_name or "", ev.address or "")
 
         pdf_attachments: list[tuple[str, bytes]] = []

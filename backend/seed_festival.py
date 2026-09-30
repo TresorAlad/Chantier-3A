@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from bootstrap import unlock_store_vault
 from config import Config
 from events import service as events_svc
+from events.festival_schedule import FESTIVAL_2026_END, FESTIVAL_2026_START, FESTIVAL_TIMEZONE
 from store import NotFoundError, Store
 from store import orgs as orgs_repo
 from store.store import new_ulid
@@ -51,14 +52,19 @@ def seed_festival_storefront(
 
     org_id = _ensure_org(store, slug=org_slug, name=DEFAULT_ORG_NAME, currency=currency)
 
+    schedule_body = {
+        "starts_at": FESTIVAL_2026_START.isoformat().replace("+00:00", "Z"),
+        "ends_at": FESTIVAL_2026_END.isoformat().replace("+00:00", "Z"),
+        "timezone": FESTIVAL_TIMEZONE,
+        "venue_name": "Lomé, Togo",
+    }
+
     try:
         event = events_svc.get_by_slug_or_id(store, event_slug)
         event_id = event["id"]
         created = False
+        events_svc.update(store, event_id, schedule_body)
     except NotFoundError:
-        now = datetime.now(timezone.utc)
-        starts = now + timedelta(days=60)
-        ends = starts + timedelta(days=2)
         event = events_svc.create(
             store,
             org_id,
@@ -67,12 +73,9 @@ def seed_festival_storefront(
                 "title": event_title,
                 "summary": "Festival tech TDEV 2026",
                 "description": "Conférences, ateliers et soirée Nexus Night.",
-                "venue_name": "Lieu principal du festival",
-                "starts_at": starts.isoformat().replace("+00:00", "Z"),
-                "ends_at": ends.isoformat().replace("+00:00", "Z"),
-                "timezone": "Africa/Lome",
                 "currency": currency,
                 "category": "festival",
+                **schedule_body,
             },
         )
         event_id = event["id"]
