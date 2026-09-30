@@ -33,7 +33,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["cli", "config", "bootstrap", "spa"]
+py-modules = ["cli", "config", "bootstrap", "spa", "seed_festival"]
 
 [tool.setuptools.packages.find]
 where = ["."]

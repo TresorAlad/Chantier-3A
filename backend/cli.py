@@ -11,6 +11,7 @@ import uvicorn
 
 from config import load_config
 from http_layer.app import create_app
+from seed_festival import DEFAULT_EVENT_SLUG, seed_festival_storefront
 from store import open_postgres
 from store.migrate import migrate_store
 
@@ -52,6 +53,39 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     print(f"Migrations (postgresql): {len(versions)} version(s) at {url}")
     if versions:
         print(f"  latest version: {versions[-1]}")
+    return 0
+
+
+def cmd_seed_festival(args: argparse.Namespace) -> int:
+    """Create published TDEV festival event and pass ticket types (idempotent)."""
+    cfg = load_config(database_url=args.database_url or "")
+    url = _require_database_url(cfg)
+    if not cfg.key_passphrase and not cfg.demo:
+        print(
+            "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required to sign tickets.",
+            file=sys.stderr,
+        )
+        return 1
+    store = open_postgres(url)
+    try:
+        result = seed_festival_storefront(
+            store,
+            cfg,
+            event_slug=args.event_slug or DEFAULT_EVENT_SLUG,
+        )
+    except Exception as err:
+        print(f"billetterie-api seed-festival failed: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+    ev = result["event"]
+    action = "created" if result["created_event"] else "already present"
+    print(f"Festival event ({action}): slug={ev['slug']} id={ev['id']} status={ev['status']}")
+    print(f"Ticket types: {len(result['ticket_types'])}")
+    for tt in result["ticket_types"]:
+        tier = tt.get("pass_tier") or "-"
+        print(f"  - {tt['name']} ({tier}) price_minor={tt['price_minor']} id={tt['id']}")
     return 0
 
 
@@ -148,6 +182,21 @@ def main() -> None:
         help="Demo keyvault and stub payments (still requires PostgreSQL)",
     )
 
+    p_seed = sub.add_parser(
+        "seed-festival",
+        help="Bootstrap published TDEV festival + pass tiers in PostgreSQL (production)",
+    )
+    p_seed.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
+    p_seed.add_argument(
+        "--event-slug",
+        default="",
+        help=f"Event slug (default {DEFAULT_EVENT_SLUG})",
+    )
+
     p_reset = sub.add_parser("reset-password", help="Print a password reset token to stdout")
     p_reset.add_argument("email", help="Account email address")
     p_reset.add_argument(
@@ -159,6 +208,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "migrate":
         raise SystemExit(cmd_migrate(args))
+    if args.command == "seed-festival":
+        raise SystemExit(cmd_seed_festival(args))
     if args.command == "serve":
         raise SystemExit(cmd_serve(args))
     if args.command == "reset-password":
