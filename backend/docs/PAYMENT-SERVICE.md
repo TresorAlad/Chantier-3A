@@ -128,6 +128,8 @@ CHANTIER3A_PAYMENT_PROVIDER_NAME=fedapay
 CHANTIER3A_PAYMENT_PROVIDERS=manual,fedapay
 ```
 
+> **FedaPay natif.** Depuis l'intégration Checkout.js, le backend embarque un provider `fedapay` qui parle directement à l'API FedaPay (sans microservice) : voir « Paiement FedaPay » dans [`API-FRONTEND.md`](API-FRONTEND.md). Ne pas nommer le provider distant `fedapay` (`CHANTIER3A_PAYMENT_PROVIDER_NAME`) si `CHANTIER3A_FEDAPAY_SECRET_KEY` est aussi défini : les deux se disputeraient le même nom. Avec le provider natif, aucun microservice n'est nécessaire.
+
 ## Fournisseurs locaux (sans MS)
 
 - **manual** : instructions virement + marquer payé / échoué par l'organisateur.

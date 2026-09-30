@@ -1,5 +1,5 @@
 import { orders as ordersApi, payments as paymentsApi } from '@/lib/api';
-import { stashOrderPayment } from '@/lib/order-payment';
+import { payWithFedapay, type PaymentOutcome } from '@/lib/fedapay-checkout';
 import type { FestivalEvent, TicketType } from '@/lib/api-types';
 import type { PassTierId } from '@/lib/festival-storefront';
 import { isPaidPassTier } from '@/lib/festival-storefront';
@@ -15,7 +15,9 @@ export interface PassRegistrationInput {
 
 export type PassCheckoutResult =
     | { kind: 'free_confirmed'; orderId: string; email: string }
-    | { kind: 'invoice'; orderId: string; email: string };
+    | { kind: 'paid'; orderId: string; email: string }
+    | { kind: 'pending'; orderId: string; email: string }
+    | { kind: 'dismissed'; orderId: string; email: string };
 
 const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -45,8 +47,10 @@ export async function completePassPurchase(params: {
     ticketType: TicketType;
     tier: PassTierId;
     registration: PassRegistrationInput;
+    /** Appelé juste avant l'ouverture du widget : l'appelant doit fermer ses modales (voir fedapay-checkout.ts). */
+    onPaymentStart?: () => void;
 }): Promise<PassCheckoutResult> {
-    const { event, ticketType, tier, registration } = params;
+    const { event, ticketType, tier, registration, onPaymentStart } = params;
     const first = registration.first_name.trim();
     const last = registration.last_name.trim();
     const email = registration.email.trim();
@@ -81,11 +85,17 @@ export async function completePassPurchase(params: {
     const order = result.order;
 
     if (isPaidPassTier(tier)) {
-        const redirect = result.payment?.redirect_url?.trim();
-        if (redirect) {
-            stashOrderPayment(order.id, { redirectUrl: redirect });
+        const transactionId = result.payment?.client_token?.trim();
+        if (!transactionId) {
+            throw new Error('Le paiement en ligne est momentanément indisponible.');
         }
-        return { kind: 'invoice', orderId: order.id, email };
+        onPaymentStart?.();
+        const outcome: PaymentOutcome = await payWithFedapay({
+            orderId: order.id,
+            transactionId,
+            customer: { email, firstname: first, lastname: last },
+        });
+        return { kind: outcome === 'paid' ? 'paid' : outcome, orderId: order.id, email };
     }
 
     try {

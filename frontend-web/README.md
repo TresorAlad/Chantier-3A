@@ -30,7 +30,8 @@ Copier `.env.example` vers `.env`. **Ne jamais committer `.env`.**
 | `VITE_DEV_API_PROXY` | Cible du proxy dev (`/api` → backend, ex. `http://127.0.0.1:8088`) |
 | `VITE_API_URL` | URL API en production si différente de `/api` |
 | `VITE_FESTIVAL_EVENT_SLUG` | Slug événement (sinon premier événement publié) |
-| `VITE_FEDAPAY_CHECKOUT_URL` | URL checkout publique (secours si l'API ne renvoie pas `redirect_url`) |
+| `VITE_FEDAPAY_PUBLIC_KEY` | Clé **publique** FedaPay pour le widget Checkout.js (jamais la clé secrète) |
+| `VITE_FEDAPAY_ENV` | `sandbox` (défaut) ou `live` |
 | `VITE_ADMIN_ROUTE` | Chemin de la page admin (non listée sur la vitrine) |
 | `VITE_*_URL` | Réseaux sociaux (URLs HTTPS publiques) |
 

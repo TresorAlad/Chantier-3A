@@ -5,7 +5,8 @@ interface ImportMetaEnv {
     readonly VITE_DEV_API_PROXY?: string;
     readonly CHANTIER3A_BASE_URL?: string;
     readonly VITE_FESTIVAL_EVENT_SLUG?: string;
-    readonly VITE_FEDAPAY_CHECKOUT_URL?: string;
+    readonly VITE_FEDAPAY_PUBLIC_KEY?: string;
+    readonly VITE_FEDAPAY_ENV?: string;
     readonly VITE_ADMIN_ROUTE?: string;
     readonly VITE_STAFF_AUTH_PATH?: string;
     readonly VITE_LINKEDIN_URL?: string;

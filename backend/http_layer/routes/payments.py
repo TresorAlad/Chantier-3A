@@ -78,11 +78,11 @@ async def payment_webhook(
             state.services.webhook_seen,
             lookup,
         )
-    except pt.ErrReplayed:
-        return {}
-    except pt.ErrUnhandledEvent:
-        return {}
-    except Exception:
+    except Exception as err:
+        # ErrReplayed / ErrUnhandledEvent are exception instances, not classes: they cannot
+        # appear in an `except` clause (that raises TypeError and turned rejections into 500s).
+        if err is pt.ErrReplayed or err is pt.ErrUnhandledEvent:
+            return {}
         return json_error(400, "invalid_request", "webhook rejected")
     try:
         state.services.orders.settle(result)

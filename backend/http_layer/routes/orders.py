@@ -215,6 +215,7 @@ def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)
             "redirect_url": charge.redirect_url,
             "reference": charge.reference,
             "instructions": charge.instructions,
+            "client_token": charge.client_token,
         },
     }
 

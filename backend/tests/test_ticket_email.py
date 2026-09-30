@@ -9,7 +9,7 @@ def test_build_ticket_email_includes_message_and_event():
         event_title="Tdev Festival 2026",
         when_label="samedi, 21 nov. | 9:00 am",
         venue_line="Lomé Convention Center",
-        billet_url="https://festival.example/order/abc/billet?email=awa%40test.com",
+        billet_url="https://festival.example/api/orders/abc/guest/ticket.pdf?email=awa%40test.com",
         tickets=(
             TicketEmailLine(pass_label="Pass Standard", holder_name="Awa Mensah", serial="TDEV-001"),
         ),
@@ -23,12 +23,12 @@ def test_build_ticket_email_includes_message_and_event():
     assert "TDEV-001" in plain
     assert "PDF" in plain
     assert "QR code" in plain
-    assert "abc/billet" in plain
+    assert "abc/guest/ticket.pdf" in plain
     assert "Référence :" not in plain
 
     assert "Votre pass est confirmé" in html
     assert "Pass Standard" in html
-    assert "Ouvrir mon billet en ligne" in html
+    assert "Télécharger mon billet" in html
     assert "Contactez l'équipe T-Dev" in html
 
 

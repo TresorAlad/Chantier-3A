@@ -32,6 +32,12 @@ npm run dev
 
 Documentation : [frontend-web/README.md](./frontend-web/README.md).
 
+## Tests
+
+Procédure complète (tests automatiques, parcours de paiement FedaPay sandbox, e-mail, webhook) : [TESTING.md](./TESTING.md).
+
+Historique des changements : [CHANGELOG.md](./CHANGELOG.md).
+
 ## Branches de travail
 
 - `feat/Backend` — évolutions backend (`backend/` à la racine)

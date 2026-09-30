@@ -30,6 +30,14 @@ import {
 } from '@/lib/static-billetterie-catalog';
 import { checkoutFailureCopy } from '@/lib/user-facing-checkout-error';
 
+const isSafeRedirect = (url: string) => {
+    try {
+        return new URL(url).protocol === 'https:';
+    } catch {
+        return false;
+    }
+};
+
 const emptyForm = (): RegistrationInput => ({
     first_name: '',
     last_name: '',
@@ -103,6 +111,7 @@ export default function App() {
                 eventId: live.event.id,
                 ticketType: live.product.ticketType,
                 registration: form,
+                onPaymentStart: () => setRegisterOpen(false),
             });
             setRegisterOpen(false);
 
@@ -114,7 +123,15 @@ export default function App() {
                 return;
             }
 
-            if (outcome.redirectUrl) {
+            if (outcome.kind === 'paid') {
+                showSuccess(
+                    'Paiement confirmé',
+                    `Merci ! Votre paiement pour le ${passTitle} est confirmé. Vous recevrez votre billet par e-mail à ${outcome.email} dans quelques instants. Pensez à vérifier vos spams.`,
+                );
+                return;
+            }
+
+            if (outcome.redirectUrl && isSafeRedirect(outcome.redirectUrl)) {
                 showSuccess(
                     'Paiement sécurisé',
                     `Après validation de votre paiement pour le ${passTitle}, vous recevrez votre billet par e-mail à ${outcome.email}.`,
@@ -127,7 +144,7 @@ export default function App() {
 
             showSuccess(
                 'Commande enregistrée',
-                `Une fois le paiement confirmé, votre billet ${passTitle} vous sera envoyé par e-mail à ${outcome.email}.`,
+                `Nous n'avons pas encore reçu la confirmation du paiement pour le ${passTitle}. Si vous avez payé, votre billet vous sera envoyé par e-mail à ${outcome.email} dès sa confirmation.`,
             );
         } catch (err) {
             showFailure(err);

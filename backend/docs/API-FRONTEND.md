@@ -371,7 +371,7 @@ Auth : Oui. Meme `404` pour l'instant.
 
 ## Commandes et paiement visiteur
 
-Parcours **sans compte** : consulter `GET /api/events/` et `GET /api/events/{id}`, creer une commande avec l'email acheteur, regler via le provider (demo : `stub` + `POST /api/payments/verify`), recevoir le mail de confirmation (pass QR pour les produits `product_kind: ticket`, pas de QR pour un goodie seul). Suivi commande : `GET /api/orders/{id}/guest?email=...`. Les comptes utilisateur sont reserves au staff (invite admin) sauf si `public_signup` est active.
+Parcours **sans compte** : consulter `GET /api/events/` et `GET /api/events/{id}`, creer une commande avec l'email acheteur, regler via le provider (demo : `stub` + `POST /api/payments/verify` ; FedaPay : widget Checkout.js, voir [Paiement FedaPay](#paiement-fedapay-checkoutjs)), recevoir le mail de confirmation (pass QR pour les produits `product_kind: ticket`, pas de QR pour un goodie seul). Suivi commande : `GET /api/orders/{id}/guest?email=...`. Les comptes utilisateur sont reserves au staff (invite admin) sauf si `public_signup` est active.
 
 ### POST `/api/orders`
 
@@ -397,7 +397,7 @@ Corps :
 
 Pour le **pass etudiant** (`pass_tier: student`), tous les champs `buyer` ci-dessus sont **obligatoires** (sauf `name`, legacy). Les autres types de billets peuvent n'envoyer que `email` et `name`.
 
-`provider` vide = provider par defaut du serveur.
+`provider` vide = provider par defaut du serveur. Si un seul provider de paiement reel est actif (`manual` et `free` ne comptent pas), il est choisi automatiquement ; s'il y en a plusieurs (ex. `fedapay` + `stub`), le champ est obligatoire. Le montant n'est **jamais** fourni par le client : le serveur le calcule depuis les `ticket_type_id` et les quantites.
 
 ### GET `/api/events/{event_id}/orders` (admin)
 
@@ -408,9 +408,20 @@ Reponse `201` :
 ```json
 {
   "order": { "id", "event_id", "status", "subtotal_minor", "fee_minor", "total_minor", "currency", "provider", ... },
-  "payment": { "provider", "redirect_url", "reference", "instructions" }
+  "payment": { "provider", "redirect_url", "client_token", "reference", "instructions" }
 }
 ```
+
+Champs de `payment` selon le provider :
+
+| Champ | Role |
+|-------|------|
+| `redirect_url` | Provider a redirection (remote) : page de paiement vers laquelle envoyer l'acheteur. Vide pour FedaPay. |
+| `client_token` | Provider **INLINE** (FedaPay) : identifiant de la transaction creee cote serveur, a passer au widget. Vide sinon. |
+| `reference` | Identifiant de commande cote provider (= `order.id`). |
+| `instructions` | Texte libre (ex. virement manuel). |
+
+Si le provider de paiement est indisponible, la commande est annulee, le stock est rendu et la reponse est `400 invalid_request` (`orders: payment provider unavailable, please retry`) : le client peut reessayer. Un pass gratuit est regle a la creation (provider `free`, aucun paiement).
 
 ### GET `/api/orders`
 
@@ -450,12 +461,29 @@ Auth : Non.
 Corps : `{ "reference": "<order_id>" }`  
 Reponse : `{ "order", "tickets" }` ou `402 payment_not_confirmed`.
 
+Le backend interroge le provider (FedaPay : `GET /transactions/merchant/<order_id>` avec la cle secrete) puis verifie reference, montant et devise avant d'emettre les billets (**fail closed**). Idempotent : rappeler la route apres un succes renvoie les memes billets. `402` = pas (encore) paye : le front peut reessayer (Mobile Money est asynchrone), un refus ou un abandon renvoie aussi `402`.
+
 ### POST `/api/payments/webhook/{provider_name}`
 
 Auth : Non (signature provider). Corps brut + en-tetes provider.
 
-Contrat complet backend ↔ microservice paiement (FedaPay, etc.) :
-[`docs/PAYMENT-SERVICE.md`](PAYMENT-SERVICE.md).
+Contrat complet backend ↔ microservice paiement :
+[`docs/PAYMENT-SERVICE.md`](PAYMENT-SERVICE.md). Pour le provider FedaPay integre, voir ci-dessous.
+
+Reponses : `200` (traite, rejoue ou evenement ignore : le provider ne doit pas reessayer), `400` (signature invalide ou corps illisible).
+
+### Paiement FedaPay (Checkout.js)
+
+Provider natif `fedapay` (devise **XOF** uniquement), active si `CHANTIER3A_FEDAPAY_SECRET_KEY` est defini et `fedapay` figure dans `CHANTIER3A_PAYMENT_PROVIDERS`.
+
+Parcours :
+
+1. `POST /api/orders` avec `"provider": "fedapay"` (ou provider par defaut) : le backend cree la transaction FedaPay (montant = total de la commande, `merchant_reference` = `order.id`) et renvoie `payment.client_token` (id de transaction).
+2. Le front charge `https://cdn.fedapay.com/checkout.js`, puis `FedaPay.init({ public_key, environment, transaction: { id: client_token }, customer, onComplete })` et ouvre le widget. **Fermer toute modale Radix/dialog avant** : elle met `pointer-events: none` sur `body` et le widget devient incliquable.
+3. Le resultat du widget (`onComplete`) ne sert qu'a l'interface. Le front appelle `POST /api/payments/verify` (repeter toutes les ~3 s tant que `402`, environ 10 fois).
+4. En parallele, FedaPay envoie `transaction.approved` a `POST /api/payments/webhook/fedapay` (en-tete `X-FEDAPAY-SIGNATURE: t=<ts>,s=<hmac>`, HMAC-SHA256 de `"<ts>.<corps brut>"` avec le secret du webhook, tolerance 300 s). Le backend ne fait pas confiance au contenu du webhook : il relit la transaction via l'API FedaPay.
+
+Regles : billet emis une seule fois (idempotent), webhook rejoue = `200` sans doublon, statuts FedaPay `approved`/`transferred` = paye, `pending` = en attente, autre = echec. Cles : cle secrete cote serveur uniquement ; le front n'a que la cle publique (`VITE_FEDAPAY_PUBLIC_KEY`).
 
 ---
 
@@ -477,6 +505,14 @@ Auth : Oui.
 ### GET `/api/tickets/{ticket_id}`
 
 Auth : Oui (detenteur).
+
+### GET `/api/orders/{order_id}/guest/ticket.pdf` et `ticket.png`
+
+Auth : Non (id de commande + e-mail acheteur).
+
+Query : `email` (obligatoire), `ticket` (optionnel, id du billet ; premier billet sinon).
+
+Reponse : le billet au format du mail (PDF en piece jointe `billet-<serial>.pdf`, ou PNG). `400` e-mail manquant ou commande non payee, `404` id/e-mail incoherents ou aucun billet. C'est le lien « Telecharger mon billet » de l'e-mail de confirmation.
 
 ### GET `/api/tickets/{ticket_id}/pdf`
 
