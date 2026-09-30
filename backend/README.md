@@ -175,3 +175,13 @@ Architecture chantier 3A : `../docs/BILLETTERIE-3A-ARCHITECTURE.md`.
 Backend **en ligne uniquement** : [`docs/V1-SCOPE.md`](docs/V1-SCOPE.md).
 
 **Référence frontend :** [`docs/API-FRONTEND.md`](docs/API-FRONTEND.md).
+
+## Tests
+
+```bash
+python -m pytest tests -q
+```
+
+Par défaut chaque test tourne sur une base **SQLite jetable** (`tests/sqlite_store.py` applique les vraies migrations en traduisant les quelques constructions PostgreSQL). L'application, elle, reste PostgreSQL uniquement.
+
+Pour tester sur PostgreSQL, définir `TEST_DATABASE_URL` vers une base dont le nom finit par `_test` (la suite vide toutes les tables ; toute autre base est refusée). Les variables `CHANTIER3A_*` de `backend/.env` ne sont pas chargées pendant les tests.
