@@ -17,7 +17,7 @@ COPY backend/payments ./payments/
 COPY backend/scan ./scan/
 COPY backend/store ./store/
 COPY backend/tickets ./tickets/
-COPY backend/cli.py backend/config.py backend/bootstrap.py backend/spa.py backend/__init__.py backend/__main__.py ./
+COPY backend/cli.py backend/config.py backend/bootstrap.py backend/spa.py backend/seed_festival.py backend/__init__.py backend/__main__.py ./
 COPY backend/migrations ./migrations
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

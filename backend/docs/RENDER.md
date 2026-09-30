@@ -63,7 +63,31 @@ Tester : `https://<billeterie-api>.onrender.com/healthz`.
 - **Root Directory** = `backend`, Dockerfile = `Dockerfile`, ou
 - laisser la racine vide et utiliser le `Dockerfile` à la racine du monorepo (copie de l’image `backend/`).
 
-### 3. Suite (optionnel)
+### 3. Données festival (obligatoire pour les inscriptions)
+
+La vitrine Vercel affiche un **catalogue statique** ; au moment du checkout l'API charge un **événement publié** dans PostgreSQL. Sans lignes en base, message : *« Aucun événement publié disponible »*.
+
+Une fois par environnement (Neon), exécuter :
+
+```bash
+billetterie-api seed-festival
+```
+
+- **Render Shell** : disponible sur les plans payants ; sinon exécuter **en local** (ci-dessous) avec la même `CHANTIER3A_DATABASE_URL` Neon que Render.
+- **Local** (gratuit) :
+
+```bash
+cd backend
+cp .env.example .env   # puis URL Neon + KEY_PASSPHRASE identiques à Render
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+billetterie-api seed-festival
+```
+- Crée l'org `tdev`, l'événement publié `tdev-festival-2026` et les passes `student` / `standard` / `vip` (idempotent).
+
+Vérifier : `GET https://chantier-3a.onrender.com/api/events/` doit lister au moins un événement.
+
+### 4. Suite (optionnel)
 
 SMTP, FedaPay, Google OAuth : voir tableau ci-dessous et [`PRODUCTION-FEDAPAY.md`](PRODUCTION-FEDAPAY.md).
 
