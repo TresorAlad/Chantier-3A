@@ -194,7 +194,7 @@ export async function request<T = unknown>(path: string, options: RequestOptions
             ...rest,
         });
     } catch (cause) {
-        throw new ApiError('Network error — check your connection.', { code: 'network_error', cause });
+        throw new ApiError('Connexion réseau impossible.', { code: 'network_error', cause });
     }
 
     if (response.status === 204) {
@@ -213,10 +213,7 @@ export async function request<T = unknown>(path: string, options: RequestOptions
             (typeof data === 'string' && data.trim()) ||
             response.statusText ||
             'Request failed';
-        if (
-            response.status >= 500 &&
-            (!message || message === 'Internal Server Error' || message === 'Request failed')
-        ) {
+        if (response.status >= 500 || message === 'Internal Server Error' || message === 'Request failed') {
             message = 'Service billetterie temporairement indisponible.';
         }
         const code = (typeof errShape?.code === 'string' && errShape.code) || `http_${response.status}`;

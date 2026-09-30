@@ -32,7 +32,7 @@ import {
     STATIC_VENUE_LABEL,
     type BilletterieListingProduct,
 } from '@/lib/static-billetterie-catalog';
-import { checkoutFailureCopy } from '@/lib/user-facing-checkout-error';
+import { checkoutFailureCopy, logCheckoutDiagnostic } from '@/lib/user-facing-checkout-error';
 import { downloadGuestTicketPdfForOrder } from '@/lib/download-guest-ticket-pdf';
 
 const isSafeRedirect = (url: string) => {
@@ -111,13 +111,14 @@ export default function App() {
         try {
             await downloadGuestTicketPdfForOrder(successTicket.orderId, successTicket.email);
         } catch (err) {
-            showFailure(err);
+            showFailure(err, 'ticket-pdf');
         } finally {
             setDownloadingPdf(false);
         }
     };
 
-    const showFailure = (err: unknown) => {
+    const showFailure = (err: unknown, context = 'checkout') => {
+        logCheckoutDiagnostic(context, err);
         const copy = checkoutFailureCopy(err);
         setFailureTitle(copy.title);
         setFailureBody(copy.body);
