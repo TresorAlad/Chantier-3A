@@ -23,6 +23,32 @@ _ADD_CONSTRAINT_FK = re.compile(
 _TO_CHAR_NOW = re.compile(
     r"to_char\(now\(\)\s+AT\s+TIME\s+ZONE\s+'UTC'\s*,\s*'[^']*'\)", re.IGNORECASE
 )
+_PG_ALTER_COLUMN = re.compile(
+    r"ALTER\s+TABLE\s+\w+\s+ALTER\s+COLUMN[^;]+;",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _split_pg_add_columns(sql: str) -> str:
+    """PostgreSQL allows several ADD COLUMN in one ALTER; SQLite needs one per statement."""
+
+    def repl(match: re.Match[str]) -> str:
+        table = match.group(1)
+        cols_part = match.group(2).strip()
+        if re.search(r",\s*ADD\s+COLUMN\s+", cols_part, re.IGNORECASE) is None:
+            return match.group(0)
+        parts = re.split(r",\s*ADD\s+COLUMN\s+", cols_part, flags=re.IGNORECASE)
+        stmts = [f"ALTER TABLE {table} ADD COLUMN {parts[0]};"]
+        for part in parts[1:]:
+            stmts.append(f"ALTER TABLE {table} ADD COLUMN {part};")
+        return "\n".join(stmts)
+
+    return re.sub(
+        r"ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(.+?);",
+        repl,
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
 
 
 def translate_migration(sql: str) -> str:
@@ -35,6 +61,9 @@ def translate_migration(sql: str) -> str:
     # the unit tests exercise (the real constraint is created by the PostgreSQL migration).
     sql = _ADD_CONSTRAINT_FK.sub("", sql)
     sql = _TO_CHAR_NOW.sub("strftime('%Y-%m-%dT%H:%M:%fZ','now')", sql)
+    sql = _PG_ALTER_COLUMN.sub("", sql)
+    sql = re.sub(r"\bBOOLEAN\b", "INTEGER", sql, flags=re.IGNORECASE)
+    sql = _split_pg_add_columns(sql)
     return sql
 
 

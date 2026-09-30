@@ -42,6 +42,13 @@ ENV_FEDAPAY_ENV = "CHANTIER3A_FEDAPAY_ENV"
 ENV_KEY_PASSPHRASE = "CHANTIER3A_KEY_PASSPHRASE"
 ENV_PUBLIC_SIGNUP = "CHANTIER3A_PUBLIC_SIGNUP"
 ENV_CONTACT_TO = "CHANTIER3A_CONTACT_TO"
+ENV_SECRET_KEY = "CHANTIER3A_SECRET_KEY"
+ENV_ALGORITHM = "CHANTIER3A_ALGORITHM"
+ENV_ACCESS_TOKEN_EXPIRE_MINUTES = "CHANTIER3A_ACCESS_TOKEN_EXPIRE_MINUTES"
+ENV_GOOGLE_CLIENT_ID = "CHANTIER3A_GOOGLE_CLIENT_ID"
+ENV_GOOGLE_CLIENT_SECRET = "CHANTIER3A_GOOGLE_CLIENT_SECRET"
+ENV_OAUTH_STATE_SECRET = "CHANTIER3A_OAUTH_STATE_SECRET"
+ENV_GOOGLE_REDIRECT_URI = "CHANTIER3A_GOOGLE_REDIRECT_URI"
 
 DEFAULT_ADDR = ":8080"
 DEFAULT_DATA_DIR = "./data"
@@ -78,6 +85,13 @@ class Config:
     fedapay_env: str
     public_signup: bool
     contact_to: str
+    secret_key: str
+    algorithm: str
+    access_token_expire_minutes: int
+    google_client_id: str
+    google_client_secret: str
+    oauth_state_secret: str
+    google_redirect_uri: str
 
 
 def load_env_file() -> Path | None:
@@ -158,12 +172,23 @@ def load_config(
         except ValueError:
             pay_timeout = 30
 
+    access_expire = 60
+    if ae := _env(ENV_ACCESS_TOKEN_EXPIRE_MINUTES):
+        try:
+            access_expire = int(ae)
+        except ValueError:
+            access_expire = 60
+
+    session_secret = _session_secret(resolved_data)
+    jwt_secret = _env(ENV_SECRET_KEY) or session_secret
+    jwt_algorithm = _env(ENV_ALGORITHM) or "HS256"
+
     return Config(
         addr=resolved_addr,
         data_dir=resolved_data,
         database_url=resolved_db_url,
         base_url=resolved_base,
-        session_secret=_session_secret(resolved_data),
+        session_secret=session_secret,
         media_dir=md,
         demo=demo,
         host_scope=scope,  # type: ignore[arg-type]
@@ -186,4 +211,14 @@ def load_config(
         fedapay_env="live" if _env(ENV_FEDAPAY_ENV).lower() == "live" else "sandbox",
         public_signup=demo or _truthy(ENV_PUBLIC_SIGNUP),
         contact_to=_env(ENV_CONTACT_TO),
+        secret_key=jwt_secret,
+        algorithm=jwt_algorithm,
+        access_token_expire_minutes=access_expire,
+        google_client_id=_env(ENV_GOOGLE_CLIENT_ID),
+        google_client_secret=_env(ENV_GOOGLE_CLIENT_SECRET),
+        oauth_state_secret=_env(ENV_OAUTH_STATE_SECRET, session_secret),
+        google_redirect_uri=_env(
+            ENV_GOOGLE_REDIRECT_URI,
+            f"{resolved_base.rstrip('/')}/api/auth/google/callback",
+        ),
     )

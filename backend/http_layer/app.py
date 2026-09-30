@@ -3,27 +3,29 @@
 from __future__ import annotations
 
 import logging
+import os
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
+from starlette.middleware.sessions import SessionMiddleware
 
 from auth import service as auth_svc
-from config import Config
-from http_layer.deps import AppState, get_app_state
-from http_layer.errors import json_error
 from bootstrap import AppServices, build_services
-from http_layer.deps import _Unauthorized, unauthorized_handler
-from http_layer.middleware.rate_limit import ScanRateLimitMiddleware
+from config import Config
+from http_layer.deps import AppState, _Unauthorized, unauthorized_handler
+from http_layer.errors import json_error
+from http_layer.middleware.rate_limit import AuthRateLimitMiddleware, ScanRateLimitMiddleware
 from http_layer.routes import (
     auth,
+    contact,
     event_pages,
     events,
     events_admin,
-    contact,
     extras,
     media,
     meta,
+    oauth,
     orders,
     orgs,
     payments,
@@ -58,6 +60,12 @@ def create_app(
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
     )
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=config.oauth_state_secret,
+        same_site="lax",
+        https_only=os.getenv("CHANTIER3A_PYENV") == "production",
+    )
 
     @app.middleware("http")
     async def session_middleware(request: Request, call_next):
@@ -66,7 +74,7 @@ def create_app(
         user = None
         if token:
             try:
-                user = auth_svc.validate_session(app.state.store, token)
+                user = auth_svc.validate_access_token(app.state.store, app.state.config, token)
             except auth_svc.SessionInvalid:
                 user = None
             if user and via_cookie and not check_csrf(
@@ -94,6 +102,7 @@ def create_app(
     api.include_router(meta.api_router)
     api.include_router(contact.router)
     api.include_router(auth.router)
+    api.include_router(oauth.router)
     api.include_router(events.router)
     api.include_router(events_admin.router)
     api.include_router(events_admin.ticket_router)
@@ -107,6 +116,7 @@ def create_app(
     api.include_router(extras.router)
     api.include_router(extras.images_router)
     app.add_middleware(ScanRateLimitMiddleware)
+    app.add_middleware(AuthRateLimitMiddleware)
     stubs.register_stubs(api)
     app.include_router(api)
 

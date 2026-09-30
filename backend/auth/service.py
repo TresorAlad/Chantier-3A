@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+import jwt
 from datetime import datetime, timedelta, timezone
 
 from auth.password import hash_password, verify_password
@@ -12,11 +13,24 @@ from store import NotFoundError, Store
 from store import password_reset_tokens as reset_store
 from store import sessions as session_store
 from store import users as user_store
-from store.users import User
+from store.users import User, save_user_refresh_token
+from config import Config
+from jwt.exceptions import InvalidTokenError
+
+
+
+from typing import Annotated
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import jwt
+from jwt.exceptions import InvalidTokenError
+from datetime import datetime, timedelta,timezone
 
 MIN_PASSWORD_LENGTH = 8
 SESSION_TTL = timedelta(days=30)
 PASSWORD_RESET_TTL = timedelta(hours=24)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 class AuthError(Exception):
@@ -87,7 +101,6 @@ def _new_token() -> tuple[str, str]:
     plaintext = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
     digest = hashlib.sha256(plaintext.encode("ascii")).hexdigest()
     return plaintext, digest
-
 
 def signup(st: Store, email: str, password: str, name: str) -> User:
     """Register a new user; raises if email is taken or password is weak."""
@@ -196,7 +209,6 @@ def mint_password_reset_token(st: Store, email: str) -> tuple[str, datetime]:
     )
     return token, expires
 
-
 def reset_password(st: Store, token: str, password: str) -> None:
     """Consume a reset token and set a new password, invalidating sessions."""
     if len(password) < MIN_PASSWORD_LENGTH:
@@ -221,3 +233,154 @@ def logout(st: Store, token: str) -> None:
         return
     token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
     session_store.delete_session(st, token_hash)
+
+
+def issue_auth_tokens(
+    st: Store,
+    settings: Config,
+    data: User,
+    expire_min: int,
+    auth_method: str = "password",
+) -> tuple[str, str, datetime]:
+    """Issue a fresh access token and a matching refresh token."""
+    refresh_token = secrets.token_urlsafe(32)
+    access_token, access_expire = gen_new_jwt_token(
+        st,
+        settings,
+        data,
+        expire_min,
+        auth_method=auth_method,
+        refresh_token=refresh_token,
+    )
+    return access_token, refresh_token, access_expire
+
+
+""" JWT method fonctions """
+def gen_new_jwt_token(st: Store, settings: Config,
+                       data: User, expire_min: int,
+                       auth_method: str = "password",
+                       refresh_token: str | None = None,
+                    ) -> tuple[str, datetime]:
+
+    if isinstance(expire_min, str):
+        expire_min = int(expire_min)
+
+    if not settings.secret_key:
+        raise RuntimeError("JWT signing key is not configured")
+    if not settings.algorithm:
+        raise RuntimeError("JWT algorithm is not configured")
+    if expire_min <= 0:
+        raise ValueError("JWT lifetime must be positive")
+
+    issued_at = datetime.now(timezone.utc)
+    access_expire = issued_at + timedelta(minutes=expire_min)
+
+    access_claims = {
+        "sub": data.id,
+        "email": data.email,
+        "name": data.name,
+        "auth_method": auth_method,
+        "iat": issued_at,
+        "exp": access_expire,
+    }
+    access_token = jwt.encode(access_claims, settings.secret_key, algorithm=settings.algorithm)
+    access_token_hash = hashlib.sha256(access_token.encode("ascii")).hexdigest()
+    session_store.create_session(
+        st,
+        access_token_hash,
+        data.id,
+        access_expire,
+        issued_at,
+    )
+    if refresh_token is not None:
+        user_store.save_user_refresh_token(st, data.id, refresh_token)
+
+    return access_token, access_expire
+
+
+def validate_access_token(st: Store, settings: Config, token: str) -> User:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            options={"require": ["sub", "exp"]},
+        )
+    except InvalidTokenError as exc:
+        raise SessionInvalid() from exc
+
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise SessionInvalid()
+
+    token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+    try:
+        session = session_store.get_session_by_token_hash(st, token_hash)
+    except NotFoundError as exc:
+        raise SessionInvalid() from exc
+    if session.user_id != user_id or session.expires_at <= datetime.now(timezone.utc):
+        raise SessionInvalid()
+
+    try:
+        user = user_store.get_user_by_id(st, user_id)
+    except NotFoundError as exc:
+        raise SessionInvalid() from exc
+    if getattr(user, "disabled", False):
+        raise SessionInvalid()
+    return user
+
+
+def refresh_access_token(
+    st: Store,
+    settings: Config,
+    refresh_token: str,
+    auth_method: str = "refresh",
+) -> tuple[str, str, datetime]:
+    """Validate a refresh token and issue a new access token + rotated refresh token."""
+    if not refresh_token:
+        raise SessionInvalid()
+    try:
+        user = user_store.get_user_by_refresh_token(st, refresh_token)
+    except NotFoundError as exc:
+        raise SessionInvalid() from exc
+    if getattr(user, "disabled", False):
+        raise SessionInvalid()
+
+    access_token, access_expire = gen_new_jwt_token(
+        st,
+        settings,
+        user,
+        settings.access_token_expire_minutes,
+        auth_method=auth_method,
+    )
+    new_refresh_token = secrets.token_urlsafe(32)
+    user_store.save_user_refresh_token(st, user.id, new_refresh_token)
+    return access_token, new_refresh_token, access_expire
+
+
+def get_current_user(st: Store, settings: Config, token:str):
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except InvalidTokenError as exc:
+        raise HTTPException(401, "invalid token") from exc
+    email = payload.get("email")
+    if email is None:
+        raise HTTPException(401, "missing email claim")
+
+    user = user_store.get_user_by_email(st, email)
+    if getattr(user, "disabled", False):
+        raise HTTPException(401, "user disabled")
+    return user
+
+# Verifies if a user is active (not disabled)
+# Raises HTTPException if user is disabled, otherwise returns the user
+def get_current_active_user(
+    current_user_data: Annotated[dict, Depends(get_current_user)]
+):
+    user = current_user_data["user"]
+    auth_method = current_user_data["auth_method"]
+
+    if getattr(user, "disabled", False):
+        raise HTTPException(status_code=400, detail="Inactive user")
+
+    return {"user": user, "auth_method": auth_method}
