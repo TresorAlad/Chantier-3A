@@ -42,7 +42,7 @@ Retourner au projet > **New** > **Web Services**.
 
 ```env
 CHANTIER3A_PYENV=production
-CHANTIER3A_DATABASE_URL=<Internal Database URL du Postgres du projet>
+CHANTIER3A_DATABASE_URL=<PostgreSQL : URL interne Render **ou** pooler Neon identique au seed local>
 CHANTIER3A_DATA_DIR=/srv/data
 CHANTIER3A_MEDIA_DIR=/srv/data/media
 CHANTIER3A_BASE_URL=https://<URL publique du front ou .onrender.com si test>

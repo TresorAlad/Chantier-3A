@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
 
 from config import Config
 from http_layer.deps import AppState, get_app_state
+from http_layer.errors import json_error
 from store import orgs
 
 root_router = APIRouter(tags=["meta"])
@@ -13,9 +14,18 @@ api_router = APIRouter(tags=["meta"])
 
 
 @root_router.get("/healthz")
-def healthz() -> dict:
-    """Healthz."""
-    return {"status": "ok"}
+def healthz(request: Request, db: bool = Query(False)) -> dict:
+    """Healthz. Pass ``?db=1`` to verify PostgreSQL connectivity (Render / Neon)."""
+    if not db:
+        return {"status": "ok"}
+    store = request.app.state.store
+    try:
+        row = store.fetchone("SELECT 1 AS ok", ())
+        if row is None or (row.get("ok") if hasattr(row, "get") else row[0]) != 1:
+            raise RuntimeError("unexpected health query result")
+    except Exception:
+        return json_error(503, "database_unavailable", "PostgreSQL unreachable or misconfigured")
+    return {"status": "ok", "database": "up"}
 
 
 @api_router.get("/public/site-config")

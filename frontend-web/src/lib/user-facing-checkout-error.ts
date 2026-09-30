@@ -25,6 +25,13 @@ export function checkoutFailureCopy(err: unknown): CheckoutFailureCopy {
             err.status >= 500 ||
             DEV_HINT_PATTERN.test(err.message);
 
+        if (err.code === 'database_unavailable') {
+            return {
+                title: 'Billetterie indisponible',
+                body: 'Nous ne pouvons pas traiter votre réservation pour le moment. Veuillez réessayer dans quelques instants.',
+            };
+        }
+
         if (err.code === 'ticketing_unavailable') {
             return {
                 title: 'Billet en cours d\'émission',

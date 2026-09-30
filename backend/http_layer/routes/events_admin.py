@@ -42,6 +42,8 @@ def get_event(event_id: str, state: AppState = Depends(get_app_state)):
         ev = events_svc.get_by_slug_or_id(state.store, event_id)
     except NotFoundError:
         return json_error(404, "not_found", "event not found")
+    except Exception:
+        return json_error(503, "database_unavailable", "Service billetterie temporairement indisponible")
     if ev.get("status") != "published":
         user = state.current_user
         if user is None or not rbac.can_manage_event(

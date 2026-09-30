@@ -40,6 +40,8 @@ def list_public_events(
         scope, org_views, org_ids = events_svc.host_scope(state.store, state.config)
     except RuntimeError:
         return json_error(500, "internal_error", "internal error")
+    except Exception:
+        return json_error(503, "database_unavailable", "Service billetterie temporairement indisponible")
 
     view = {
         "scope": scope,
