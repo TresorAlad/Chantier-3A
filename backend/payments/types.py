@@ -63,6 +63,7 @@ class Charge:
     reference: str
     redirect_url: str = ""
     instructions: str = ""
+    client_token: str = ""
 
 
 @dataclass

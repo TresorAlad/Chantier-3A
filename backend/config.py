@@ -36,6 +36,9 @@ ENV_PAYMENT_SERVICE_API_KEY = "CHANTIER3A_PAYMENT_SERVICE_API_KEY"
 ENV_PAYMENT_WEBHOOK_SECRET = "CHANTIER3A_PAYMENT_WEBHOOK_SECRET"
 ENV_PAYMENT_PROVIDER_NAME = "CHANTIER3A_PAYMENT_PROVIDER_NAME"
 ENV_PAYMENT_SERVICE_TIMEOUT = "CHANTIER3A_PAYMENT_SERVICE_TIMEOUT"
+ENV_FEDAPAY_SECRET_KEY = "CHANTIER3A_FEDAPAY_SECRET_KEY"
+ENV_FEDAPAY_WEBHOOK_SECRET = "CHANTIER3A_FEDAPAY_WEBHOOK_SECRET"
+ENV_FEDAPAY_ENV = "CHANTIER3A_FEDAPAY_ENV"
 ENV_KEY_PASSPHRASE = "CHANTIER3A_KEY_PASSPHRASE"
 ENV_PUBLIC_SIGNUP = "CHANTIER3A_PUBLIC_SIGNUP"
 ENV_CONTACT_TO = "CHANTIER3A_CONTACT_TO"
@@ -70,6 +73,9 @@ class Config:
     payment_webhook_secret: str
     payment_provider_name: str
     payment_service_timeout: int
+    fedapay_secret_key: str
+    fedapay_webhook_secret: str
+    fedapay_env: str
     public_signup: bool
     contact_to: str
 
@@ -175,6 +181,9 @@ def load_config(
         payment_webhook_secret=_env(ENV_PAYMENT_WEBHOOK_SECRET),
         payment_provider_name=_env(ENV_PAYMENT_PROVIDER_NAME) or "community-pay",
         payment_service_timeout=pay_timeout,
+        fedapay_secret_key=_env(ENV_FEDAPAY_SECRET_KEY),
+        fedapay_webhook_secret=_env(ENV_FEDAPAY_WEBHOOK_SECRET),
+        fedapay_env="live" if _env(ENV_FEDAPAY_ENV).lower() == "live" else "sandbox",
         public_signup=demo or _truthy(ENV_PUBLIC_SIGNUP),
         contact_to=_env(ENV_CONTACT_TO),
     )

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from config import Config
 from notify.notify import NotifyService
 from orders.service import OrdersService
+from payments.fedapay import FedapayProvider
 from payments.free import FreeProvider
 from payments.manual import ManualProvider
 from payments.registry import Registry
@@ -69,6 +70,16 @@ def build_payment_registry(store: Store, config: Config) -> Registry:
                 webhook_secret=config.payment_webhook_secret,
                 provider_name=config.payment_provider_name,
                 timeout=float(config.payment_service_timeout),
+            )
+        )
+    if config.fedapay_secret_key:
+        reg.register(
+            FedapayProvider(
+                secret_key=config.fedapay_secret_key,
+                webhook_secret=config.fedapay_webhook_secret,
+                environment=config.fedapay_env,
+                timeout=float(config.payment_service_timeout),
+                default_callback_url=config.base_url,
             )
         )
     return reg
