@@ -278,7 +278,7 @@ function uploadFile<T = unknown>(
             if (xhr.status === 401) notifyUnauthorized();
             reject(new ApiError(message, { code, status: xhr.status }));
         };
-        xhr.onerror = () => reject(new ApiError('Network error — check your connection.', { code: 'network_error' }));
+        xhr.onerror = () => reject(new ApiError('Connexion réseau impossible.', { code: 'network_error' }));
 
         const form = new FormData();
         form.append('file', file);
