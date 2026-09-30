@@ -80,8 +80,6 @@ def normalize_registration(
         missing.append("last_name")
     if not email:
         missing.append("email")
-    if not school_name:
-        missing.append("school_name")
     if not motivation:
         missing.append("motivation")
     if not wish:

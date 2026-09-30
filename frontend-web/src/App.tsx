@@ -29,6 +29,7 @@ import {
     type BilletterieListingProduct,
 } from '@/lib/static-billetterie-catalog';
 import { checkoutFailureCopy } from '@/lib/user-facing-checkout-error';
+import { downloadGuestTicketPdfForOrder } from '@/lib/download-guest-ticket-pdf';
 
 const isSafeRedirect = (url: string) => {
     try {
@@ -60,6 +61,8 @@ export default function App() {
     const [successOpen, setSuccessOpen] = useState(false);
     const [successTitle, setSuccessTitle] = useState('');
     const [successBody, setSuccessBody] = useState('');
+    const [successTicket, setSuccessTicket] = useState<{ orderId: string; email: string } | null>(null);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
 
     const [failureOpen, setFailureOpen] = useState(false);
     const [failureTitle, setFailureTitle] = useState('');
@@ -82,10 +85,32 @@ export default function App() {
         setRegisterOpen(true);
     };
 
-    const showSuccess = (title: string, body: string) => {
+    const showSuccess = (
+        title: string,
+        body: string,
+        ticketDownload?: { orderId: string; email: string } | null,
+    ) => {
         setSuccessTitle(title);
         setSuccessBody(body);
+        setSuccessTicket(ticketDownload ?? null);
         setSuccessOpen(true);
+    };
+
+    const closeSuccess = () => {
+        setSuccessOpen(false);
+        setSuccessTicket(null);
+    };
+
+    const handleDownloadTicket = async () => {
+        if (!successTicket) return;
+        setDownloadingPdf(true);
+        try {
+            await downloadGuestTicketPdfForOrder(successTicket.orderId, successTicket.email);
+        } catch (err) {
+            showFailure(err);
+        } finally {
+            setDownloadingPdf(false);
+        }
     };
 
     const showFailure = (err: unknown) => {
@@ -119,6 +144,7 @@ export default function App() {
                 showSuccess(
                     'Inscription réussie',
                     `Merci ! Votre inscription au ${passTitle} est confirmée. Vous recevrez votre billet par e-mail à ${outcome.email} dans quelques instants. Pensez à vérifier vos spams.`,
+                    { orderId: outcome.orderId, email: outcome.email },
                 );
                 return;
             }
@@ -127,6 +153,7 @@ export default function App() {
                 showSuccess(
                     'Paiement confirmé',
                     `Merci ! Votre paiement pour le ${passTitle} est confirmé. Vous recevrez votre billet par e-mail à ${outcome.email} dans quelques instants. Pensez à vérifier vos spams.`,
+                    { orderId: outcome.orderId, email: outcome.email },
                 );
                 return;
             }
@@ -155,35 +182,40 @@ export default function App() {
 
     const venue = STATIC_VENUE_LABEL;
     const heroTitle = STATIC_FESTIVAL_TITLE;
-    const isStudentPass = activeListing?.checkoutTier === 'student';
-
     return (
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
             <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-soft">
-                <div className="container flex h-16 items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <img src="/image.png" className="h-9 w-auto dark:invert transition-all" alt="T-Dev Logo" />
-                        <div className="flex flex-col">
-                            <span className="font-display font-extrabold text-lg tracking-tight text-foreground">
+                <div className="container flex min-h-14 items-center justify-between gap-2 py-2 sm:h-16 sm:gap-3 sm:py-0">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                        <img
+                            src="/image.png"
+                            className="h-8 w-auto shrink-0 dark:invert transition-all sm:h-9"
+                            alt="TDEV Festival"
+                        />
+                        <div className="hidden min-w-0 flex-col sm:flex">
+                            <span className="truncate font-display text-lg font-extrabold tracking-tight text-foreground">
                                 TDEV Festival
                             </span>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                            <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Billetterie officielle
                             </span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-1 sm:gap-3">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground hover:text-foreground rounded-full"
+                            className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground sm:h-10 sm:w-10"
                             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                             aria-label="Changer le thème"
                         >
-                            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
                         </Button>
-                        <Button size="sm" className="shadow-glow-primary" asChild>
-                            <a href="#passes">Réserver un billet</a>
+                        <Button size="sm" className="h-9 shrink-0 px-2.5 text-xs shadow-glow-primary sm:h-9 sm:px-3 sm:text-sm" asChild>
+                            <a href="#passes">
+                                <span className="sm:hidden">Réserver</span>
+                                <span className="hidden sm:inline">Réserver un billet</span>
+                            </a>
                         </Button>
                     </div>
                 </div>
@@ -367,20 +399,6 @@ export default function App() {
                             />
                             {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
                         </div>
-                        {isStudentPass && (
-                            <div className="space-y-2">
-                                <Label htmlFor="school">École ou organisation</Label>
-                                <Input
-                                    id="school"
-                                    value={form.school_name ?? ''}
-                                    onChange={(ev) => setForm({ ...form, school_name: ev.target.value })}
-                                    required
-                                />
-                                {fieldErrors.school_name && (
-                                    <p className="text-xs text-destructive">{fieldErrors.school_name}</p>
-                                )}
-                            </div>
-                        )}
                         <div className="space-y-2">
                             <Label htmlFor="why">Pourquoi voulez-vous participer ?</Label>
                             <Textarea
@@ -421,16 +439,32 @@ export default function App() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
+            <Dialog open={successOpen} onOpenChange={(open) => (open ? setSuccessOpen(true) : closeSuccess())}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>{successTitle}</DialogTitle>
                         <DialogDescription className="text-base leading-relaxed pt-2">{successBody}</DialogDescription>
                     </DialogHeader>
-                    <DialogFooter>
-                        <Button className="w-full" onClick={() => setSuccessOpen(false)}>
+                    <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={closeSuccess}>
                             Fermer
                         </Button>
+                        {successTicket ? (
+                            <Button
+                                className="w-full sm:w-auto"
+                                disabled={downloadingPdf}
+                                onClick={() => void handleDownloadTicket()}
+                            >
+                                {downloadingPdf ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Téléchargement…
+                                    </>
+                                ) : (
+                                    'Télécharger mon billet'
+                                )}
+                            </Button>
+                        ) : null}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

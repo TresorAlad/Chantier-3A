@@ -31,13 +31,8 @@ export function validatePassRegistration(
     if (!input.email.trim()) errors.email = 'Indiquez votre e-mail.';
     else if (!looksLikeEmail(input.email)) errors.email = 'Adresse e-mail invalide.';
     if (!input.wish.trim()) errors.wish = 'Partagez vos attentes pour l\'édition 2026.';
-    if (tier === 'student') {
-        if (!input.school_name?.trim()) {
-            errors.school_name = 'Indiquez le nom de votre école ou établissement.';
-        }
-        if (!input.motivation?.trim()) {
-            errors.motivation = 'Expliquez pourquoi vous souhaitez participer.';
-        }
+    if (tier === 'student' && !input.motivation?.trim()) {
+        errors.motivation = 'Expliquez pourquoi vous souhaitez participer.';
     }
     return errors;
 }

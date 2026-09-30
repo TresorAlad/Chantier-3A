@@ -20,7 +20,6 @@ const emailOk = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim(
 
 function validateRegistrationFields(
     input: RegistrationInput,
-    requireSchool: boolean,
 ): Partial<Record<keyof RegistrationInput, string>> {
     const errors: Partial<Record<keyof RegistrationInput, string>> = {};
     if (!input.first_name.trim()) errors.first_name = 'Indiquez votre prénom.';
@@ -29,25 +28,22 @@ function validateRegistrationFields(
     else if (!emailOk(input.email)) errors.email = 'Adresse e-mail invalide.';
     if (!input.motivation.trim()) errors.motivation = 'Ce champ est requis.';
     if (!input.wish.trim()) errors.wish = 'Ce champ est requis.';
-    if (requireSchool && !input.school_name?.trim()) {
-        errors.school_name = 'Indiquez votre école ou organisation.';
-    }
     return errors;
 }
 
 export function validateRegistration(
     input: RegistrationInput,
-    ticketType: TicketType,
+    _ticketType: TicketType,
 ): Partial<Record<keyof RegistrationInput, string>> {
-    return validateRegistrationFields(input, ticketType.pass_tier === 'student');
+    return validateRegistrationFields(input);
 }
 
 /** Validation côté formulaire avant appel API (catalogue statique). */
 export function validateRegistrationForCheckoutTier(
     input: RegistrationInput,
-    tier: 'student' | 'vip',
+    _tier: 'student' | 'vip',
 ): Partial<Record<keyof RegistrationInput, string>> {
-    return validateRegistrationFields(input, tier === 'student');
+    return validateRegistrationFields(input);
 }
 
 export async function completeCheckout(params: {
