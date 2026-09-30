@@ -1,4 +1,5 @@
 import { orders as ordersApi, payments as paymentsApi } from '@/lib/api';
+import { payWithFedapay } from '@/lib/fedapay-checkout';
 import type { TicketType } from '@/lib/api-types';
 
 export interface RegistrationInput {
@@ -12,6 +13,7 @@ export interface RegistrationInput {
 
 export type CheckoutOutcome =
     | { kind: 'free_confirmed'; orderId: string; email: string }
+    | { kind: 'paid'; orderId: string; email: string }
     | { kind: 'paid_pending'; orderId: string; email: string; redirectUrl?: string };
 
 const emailOk = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -52,8 +54,10 @@ export async function completeCheckout(params: {
     eventId: string;
     ticketType: TicketType;
     registration: RegistrationInput;
+    /** Appelé juste avant l'ouverture du widget : l'appelant doit fermer ses modales (voir fedapay-checkout.ts). */
+    onPaymentStart?: () => void;
 }): Promise<CheckoutOutcome> {
-    const { eventId, ticketType, registration } = params;
+    const { eventId, ticketType, registration, onPaymentStart } = params;
     const first = registration.first_name.trim();
     const last = registration.last_name.trim();
     const email = registration.email.trim();
@@ -77,6 +81,17 @@ export async function completeCheckout(params: {
     const paid = ticketType.price_minor > 0;
 
     if (paid) {
+        const transactionId = result.payment?.client_token?.trim();
+        if (transactionId) {
+            onPaymentStart?.();
+            const outcome = await payWithFedapay({
+                orderId: order.id,
+                transactionId,
+                customer: { email, firstname: first, lastname: last },
+            });
+            if (outcome === 'paid') return { kind: 'paid', orderId: order.id, email };
+            return { kind: 'paid_pending', orderId: order.id, email };
+        }
         const redirectUrl = result.payment?.redirect_url?.trim();
         if (redirectUrl) {
             return { kind: 'paid_pending', orderId: order.id, email, redirectUrl };

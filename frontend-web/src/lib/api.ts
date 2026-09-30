@@ -593,6 +593,8 @@ export interface CreateOrderResponse {
         redirect_url?: string;
         reference?: string;
         instructions?: string;
+        /** Identifiant de transaction pour le widget Checkout.js (FedaPay). */
+        client_token?: string;
     };
 }
 
