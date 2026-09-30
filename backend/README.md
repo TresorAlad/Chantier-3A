@@ -46,6 +46,23 @@ cp .env.example .env
 | `CHANTIER3A_KEY_PASSPHRASE` | Oui en prod | Passphrase du coffre de clés (signature billets) |
 | `CHANTIER3A_BASE_URL` | Recommandé | URL publique (`http://localhost:8080`) |
 
+Variables optionnelles :
+
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `CHANTIER3A_ADDR` | `:8080` | Adresse d'écoute de `serve` |
+| `CHANTIER3A_PUBLIC_SIGNUP` | off (on avec `--demo`) | Autorise `POST /api/auth/signup` |
+| `CHANTIER3A_PAYMENT_PROVIDERS` | `manual` | Providers de paiement autorisés (`manual,fedapay`) |
+| `CHANTIER3A_FEDAPAY_SECRET_KEY` | vide | Clé secrète FedaPay (`sk_sandbox_…` / `sk_live_…`). Active le provider `fedapay` si renseignée |
+| `CHANTIER3A_FEDAPAY_WEBHOOK_SECRET` | vide | Secret du webhook FedaPay (`wh_…`). Vide : tout webhook reçu est refusé (400) |
+| `CHANTIER3A_FEDAPAY_ENV` | `sandbox` | `sandbox` ou `live` |
+| `CHANTIER3A_SMTP_HOST`, `_PORT` (587), `_USER`, `_PASSWORD`, `_FROM` | vide | E-mail de confirmation avec billet PDF. Sans `HOST` et `FROM`, aucun e-mail n'est envoyé (message dans les logs) |
+| `CHANTIER3A_PAYMENT_SERVICE_URL`, `_API_KEY`, `CHANTIER3A_PAYMENT_WEBHOOK_SECRET`, `CHANTIER3A_PAYMENT_PROVIDER_NAME` | vide | Provider distant (microservice) : voir [`docs/PAYMENT-SERVICE.md`](docs/PAYMENT-SERVICE.md) |
+
+**`CHANTIER3A_BASE_URL` joue trois rôles** : origine autorisée par le CORS (une seule, celle du navigateur), URL de retour envoyée à FedaPay, et base du lien « Télécharger mon billet » de l'e-mail (`{BASE_URL}/api/orders/<id>/guest/ticket.pdf`). Elle doit donc être l'adresse publique du site, avec `/api` routé vers ce backend (reverse proxy). En dev, laissez le front passer par le proxy Vite (`VITE_DEV_API_PROXY`) plutôt que d'appeler l'API en cross-origin.
+
+Paiement FedaPay : voir [`../TESTING.md`](../TESTING.md) (procédure) et [`docs/API-FRONTEND.md`](docs/API-FRONTEND.md) (contrat) ; mise en production : [`docs/PRODUCTION-FEDAPAY.md`](docs/PRODUCTION-FEDAPAY.md).
+
 Exemple PostgreSQL (Neon, Supabase, etc.) :
 
 ```env
@@ -56,7 +73,7 @@ CHANTIER3A_BASE_URL=http://localhost:8080
 CHANTIER3A_ADDR=:8080
 ```
 
-Le CLI charge automatiquement `backend-python/.env` (`python-dotenv`).
+Le CLI charge automatiquement `backend/.env` (`python-dotenv`).
 
 ---
 
@@ -147,7 +164,7 @@ backend-python/
   events/
   http_layer/       # FastAPI (routes, middleware)
   money/
-  notify/
+  notify/           # e-mail + billet PDF/PNG (assets/ : polices, logo)
   orders/
   payments/
   scan/
@@ -167,7 +184,7 @@ Architecture chantier 3A : `../docs/BILLETTERIE-3A-ARCHITECTURE.md`.
 | Domaine | État |
 |---------|------|
 | Auth, orgs, events, orders, tickets | Disponible |
-| Paiements manual / stub / remote | Disponible |
+| Paiements manual / free / stub / remote / **fedapay** (Checkout.js, XOF) | Disponible |
 | Scan porte (`POST /api/scan`) | Disponible (en ligne) |
 | Offline, bundle, sync, peers | **Retiré** |
 | Payouts, pages event avancées | Stub ou 501 |
