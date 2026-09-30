@@ -53,9 +53,9 @@ VITE_API_URL=https://api.example.com/api
 
 Force l'événement affiché (ex. `tdev-festival-2026`). Sinon : premier événement publié retourné par `GET /api/events/`.
 
-### `VITE_FEDAPAY_CHECKOUT_URL`
+### `VITE_FEDAPAY_PUBLIC_KEY` / `VITE_FEDAPAY_ENV`
 
-URL HTTPS de secours pour rediriger l'utilisateur si `POST /api/orders` ne renvoie pas `payment.redirect_url`. Validée dans `env.ts` (http/https uniquement).
+Clé publique FedaPay et environnement (`sandbox` par défaut, `live` en production) pour le widget Checkout.js (`src/lib/fedapay-checkout.ts`). La clé publique est faite pour être exposée ; la **clé secrète** ne doit jamais apparaître ici (backend : `CHANTIER3A_FEDAPAY_SECRET_KEY`). Le domaine du site doit être autorisé dans le tableau de bord FedaPay.
 
 ### `VITE_ADMIN_ROUTE`
 
