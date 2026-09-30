@@ -49,6 +49,7 @@ ENV_GOOGLE_CLIENT_ID = "CHANTIER3A_GOOGLE_CLIENT_ID"
 ENV_GOOGLE_CLIENT_SECRET = "CHANTIER3A_GOOGLE_CLIENT_SECRET"
 ENV_OAUTH_STATE_SECRET = "CHANTIER3A_OAUTH_STATE_SECRET"
 ENV_GOOGLE_REDIRECT_URI = "CHANTIER3A_GOOGLE_REDIRECT_URI"
+ENV_PORT = "PORT"
 
 DEFAULT_ADDR = ":8080"
 DEFAULT_DATA_DIR = "./data"
@@ -112,6 +113,15 @@ def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
+def _resolve_listen_addr(cli_addr: str) -> str:
+    """Listen address: Render/Heroku set PORT; CHANTIER3A_ADDR overrides when PORT is unset."""
+    port = _env(ENV_PORT)
+    if port:
+        return f":{port}"
+    explicit = cli_addr or _env(ENV_ADDR, DEFAULT_ADDR)
+    return explicit or DEFAULT_ADDR
+
+
 def _truthy(key: str) -> bool:
     """Internal: truthy."""
     v = os.environ.get(key, "").strip().lower()
@@ -145,7 +155,7 @@ def load_config(
 ) -> Config:
     """Build a ``Config`` from environment variables with optional CLI overrides."""
     load_env_file()
-    resolved_addr = addr or _env(ENV_ADDR, DEFAULT_ADDR)
+    resolved_addr = _resolve_listen_addr(addr)
     resolved_data = data_dir or _env(ENV_DATA_DIR, DEFAULT_DATA_DIR)
     resolved_base = base_url or _env(ENV_BASE_URL, DEFAULT_BASE_URL)
     resolved_db_url = database_url or _env(ENV_DATABASE_URL)

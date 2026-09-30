@@ -1,0 +1,48 @@
+# Blueprint Render: API billetterie (Docker) + Postgres + disque pour medias/coffre.
+# Deploy: Dashboard Render > New > Blueprint > connecter ce depot.
+# Doc pas a pas: backend/docs/RENDER.md
+
+databases:
+  - name: chantier3a-db
+    databaseName: chantier3a
+    user: chantier3a
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: chantier3a-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /healthz
+    disk:
+      name: chantier3a-api-data
+      mountPath: /srv/data
+      sizeGB: 1
+    envVars:
+      - key: CHANTIER3A_PYENV
+        value: production
+      - key: CHANTIER3A_DATA_DIR
+        value: /srv/data
+      - key: CHANTIER3A_MEDIA_DIR
+        value: /srv/data/media
+      - key: CHANTIER3A_DATABASE_URL
+        fromDatabase:
+          name: chantier3a-db
+          property: connectionString
+      - key: CHANTIER3A_BASE_URL
+        sync: false
+      - key: CHANTIER3A_KEY_PASSPHRASE
+        sync: false
+      - key: CHANTIER3A_SESSION_SECRET
+        generateValue: true
+      - key: CHANTIER3A_SECRET_KEY
+        generateValue: true
+      - key: CHANTIER3A_OAUTH_STATE_SECRET
+        generateValue: true
+      - key: CHANTIER3A_PAYMENT_PROVIDERS
+        value: manual
+      - key: CHANTIER3A_PUBLIC_SIGNUP
+        value: "0"

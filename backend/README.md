@@ -156,6 +156,14 @@ Build manuel : `docker build -t billetterie-api .`
 
 ---
 
+## 5b. Render (hébergement cloud)
+
+Blueprint à la racine du monorepo : [`../render.yaml`](../render.yaml). Procédure détaillée : [`docs/RENDER.md`](docs/RENDER.md).
+
+En bref : Web Service Docker (`backend/`), Postgres Render, disque sur `/srv/data`, migrations au démarrage. La variable **`PORT`** (injectée par Render) est prise en charge automatiquement ; définir `CHANTIER3A_PYENV=production` pour les cookies de session en HTTPS.
+
+---
+
 ## 6. Structure du code
 
 ```text
