@@ -25,6 +25,15 @@ export function checkoutFailureCopy(err: unknown): CheckoutFailureCopy {
             err.status >= 500 ||
             DEV_HINT_PATTERN.test(err.message);
 
+        if (err.code === 'ticketing_unavailable') {
+            return {
+                title: 'Billet en cours d\'émission',
+                body:
+                    err.message.trim() ||
+                    'Votre paiement a été enregistré. L\'émission du billet prend plus de temps que prévu : consultez vos e-mails ou réessayez le téléchargement dans quelques minutes.',
+            };
+        }
+
         if (infra) {
             return {
                 title: 'Billetterie indisponible',

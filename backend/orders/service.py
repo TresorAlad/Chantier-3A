@@ -360,6 +360,11 @@ class OrdersService:
         """Ticket on ``OrdersService``."""
         return self._ticket_view(tickets_repo.get_ticket_by_id(self._store, ticket_id))
 
+    def tickets_for_order(self, order_id: str) -> list[TicketView]:
+        """Tickets already minted for a paid order."""
+        rows = tickets_repo.list_tickets_for_order(self._store, order_id)
+        return [self._ticket_view(t) for t in rows]
+
     def _to_view(self, o: orders_repo.Order, items) -> OrderView:
         """To view on ``OrdersService``."""
         item_views = None

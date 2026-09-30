@@ -48,7 +48,24 @@ def verify_payment(body: dict, state: AppState = Depends(get_app_state)):
         return json_error(402, "payment_not_confirmed", "payment could not be verified as paid")
     try:
         _, tickets = state.services.orders.settle(result)
-    except Exception:
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "signing key unavailable" in msg or "vault locked" in msg:
+            return json_error(
+                503,
+                "ticketing_unavailable",
+                "Paiement reçu mais émission du billet impossible (coffre de clés). Contactez l'organisateur.",
+            )
+        try:
+            existing = state.services.orders.get(reference)
+            if existing.status == "paid":
+                minted = state.services.orders.tickets_for_order(reference)
+                return {
+                    "order": _order_json(existing),
+                    "tickets": _tickets_json(minted),
+                }
+        except NotFoundError:
+            pass
         return json_error(500, "internal_error", "internal error")
     updated = state.services.orders.get(reference)
     return {

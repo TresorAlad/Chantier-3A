@@ -135,6 +135,14 @@ def test_verify_amount_mismatch_fails_closed():
     assert exc.value is pt.ErrAmountMismatch
 
 
+def test_verify_amount_with_customer_fees_accepts_overpay():
+    fake = FakeFedapay()
+    provider = _provider(fake)
+    provider.begin(_order())
+    fake.approve("ORDER1", amount=15208)
+    pt.reconcile(provider.verify("ORDER1"), pt.OrderRef("ORDER1", 15000, "XOF"))
+
+
 def test_webhook_valid_refetches_transaction_from_api():
     fake = FakeFedapay()
     provider = _provider(fake)

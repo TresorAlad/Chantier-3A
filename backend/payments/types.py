@@ -118,7 +118,8 @@ def reconcile(result: Result, want: OrderRef) -> None:
         raise ErrReferenceMismatch
     if result.status != Status.PAID:
         raise ErrNotPaid
-    if result.amount_minor != want.amount_minor:
+    # FedaPay peut faire payer des frais en plus au client : le montant API peut dépasser le total commande.
+    if result.amount_minor < want.amount_minor:
         raise ErrAmountMismatch
     if result.currency.upper() != want.currency.upper():
         raise ErrCurrencyMismatch

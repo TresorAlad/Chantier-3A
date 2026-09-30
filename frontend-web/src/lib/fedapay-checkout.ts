@@ -1,4 +1,4 @@
-import { ApiError, payments as paymentsApi } from '@/lib/api';
+import { ApiError, orders as ordersApi, payments as paymentsApi } from '@/lib/api';
 import { getOptionalEnv } from '@/lib/env';
 
 /**
@@ -15,7 +15,7 @@ import { getOptionalEnv } from '@/lib/env';
 
 const CHECKOUT_SCRIPT_URL = 'https://cdn.fedapay.com/checkout.js?v=1.1.7';
 const VERIFY_INTERVAL_MS = 3000;
-const VERIFY_MAX_ATTEMPTS = 10;
+const VERIFY_MAX_ATTEMPTS = 20;
 
 export type PaymentOutcome = 'paid' | 'pending' | 'dismissed';
 
@@ -113,6 +113,15 @@ export async function confirmPayment(
     return 'pending';
 }
 
+async function recoverPaidOrder(orderId: string, email: string): Promise<boolean> {
+    try {
+        const guest = await ordersApi.getGuest(orderId, email.trim());
+        return (guest.tickets?.length ?? 0) > 0;
+    } catch {
+        return false;
+    }
+}
+
 /** Ouvre le widget puis confirme côté serveur. */
 export async function payWithFedapay(params: {
     orderId: string;
@@ -120,11 +129,22 @@ export async function payWithFedapay(params: {
     customer: PaymentCustomer;
 }): Promise<PaymentOutcome> {
     const { orderId, transactionId, customer } = params;
-    const result = await openWidget(transactionId, customer);
-    if (result === 'dismissed') {
-        // Une fermeture peut suivre un paiement déjà accepté : une seule vérification.
-        const once = await confirmPayment(orderId, { attempts: 1 });
-        return once === 'paid' ? 'paid' : 'dismissed';
+    const email = customer.email.trim();
+    try {
+        const result = await openWidget(transactionId, customer);
+        if (result === 'dismissed') {
+            // Une fermeture peut suivre un paiement déjà accepté : une seule vérification.
+            const once = await confirmPayment(orderId, { attempts: 1 });
+            if (once === 'paid') return 'paid';
+            if (await recoverPaidOrder(orderId, email)) return 'paid';
+            return 'dismissed';
+        }
+        const confirmed = await confirmPayment(orderId);
+        if (confirmed === 'paid') return 'paid';
+        if (await recoverPaidOrder(orderId, email)) return 'paid';
+        return confirmed;
+    } catch (err) {
+        if (await recoverPaidOrder(orderId, email)) return 'paid';
+        throw err;
     }
-    return confirmPayment(orderId);
 }

@@ -23,6 +23,10 @@ import {
     type RegistrationInput,
 } from '@/lib/billetterie-checkout';
 import {
+    billetterieCardClass,
+    billetterieCtaClass,
+    billetterieCtaVariant,
+    billetteriePriceClass,
     getStaticBilletterieListing,
     STATIC_FESTIVAL_TITLE,
     STATIC_VENUE_LABEL,
@@ -254,13 +258,7 @@ export default function App() {
                             transition={{ duration: 0.45, delay: index * 0.12 }}
                             className="flex"
                         >
-                            <Card
-                                className={`w-full flex flex-col overflow-hidden relative transition-all duration-300 hover:shadow-floating hover:-translate-y-1 ${
-                                    ticket.popular
-                                        ? 'border-2 border-primary shadow-glow-primary bg-card/90'
-                                        : 'border-border/60 bg-card/60 hover:border-primary/40'
-                                }`}
-                            >
+                            <Card className={billetterieCardClass(ticket)}>
                                 {ticket.badgeText && (
                                     <div className="absolute top-4 right-4 z-10">
                                         <Badge
@@ -273,7 +271,13 @@ export default function App() {
                                 )}
 
                                 <div className="relative h-44 overflow-hidden bg-muted/50">
-                                    <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
+                                    <div
+                                        className={`absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent ${
+                                            ticket.cardAccent === 'nexus'
+                                                ? 'from-[#3a2618]/80 via-amber-950/30'
+                                                : ''
+                                        }`}
+                                    />
                                     <div className="absolute bottom-4 left-6 right-6">
                                         <span className="text-xs uppercase tracking-wider text-primary font-bold">
                                             {ticket.category}
@@ -290,11 +294,7 @@ export default function App() {
                                 <CardHeader className="pt-2 pb-4">
                                     <div className="flex items-baseline gap-2 mb-2">
                                         <span
-                                            className={`font-display font-black text-3xl tracking-tight ${
-                                                ticket.isFree
-                                                    ? 'text-emerald-500 dark:text-emerald-400'
-                                                    : 'text-foreground'
-                                            }`}
+                                            className={`font-display font-black text-3xl tracking-tight ${billetteriePriceClass(ticket)}`}
                                         >
                                             {ticket.priceLabel}
                                         </span>
@@ -335,10 +335,8 @@ export default function App() {
                                         </Button>
                                     ) : (
                                         <Button
-                                            variant={ticket.popular ? 'default' : 'outline'}
-                                            className={`w-full font-bold h-11 ${
-                                                ticket.popular ? 'shadow-glow-primary' : ''
-                                            }`}
+                                            variant={billetterieCtaVariant(ticket)}
+                                            className={billetterieCtaClass(ticket)}
                                             onClick={() => beginCheckout(ticket)}
                                         >
                                             {ticket.isFree ? 'Réserver gratuitement' : 'Choisir ce pass'}
