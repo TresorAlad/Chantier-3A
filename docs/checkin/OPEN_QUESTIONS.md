@@ -3,7 +3,7 @@
 Classées par personne. Pour chaque question : la **valeur par défaut retenue en attendant** (configurable, la plus prudente),
 et où elle vit. Rien ici n'est une règle métier validée.
 
-Dernière mise à jour : 2026-09-30.
+Dernière mise à jour : 2026-10-01.
 
 ## Trésor (lead Billetterie, architecte API 3A)
 
@@ -14,12 +14,14 @@ Dernière mise à jour : 2026-09-30.
 | 3 | Le 3A est décrit « en ligne uniquement V1 » : acceptez-vous une couche hors ligne/sync dans ce dépôt ? Où est `docs/V1-SCOPE.md` ? | Oui (validé oralement) ; module isolé, aucune modification du comportement existant. |
 | 4 | Les « options » (`product_kind = 'option'`, ex. After) créent-elles des billets/QR ? Comment un droit After/Repas est-il représenté côté commande ? | Les droits par poste viennent uniquement de `checkin_station_rules` (par `ticket_type_id`). |
 | 5 | `tickets.voided_at` est-il toujours renseigné quand un billet est annulé/remboursé ? Y a-t-il un historique de statuts ? | Statut non valide sans `voided_at` ⇒ considéré annulé **avant** le scan (prudent). |
-| 6 | Autorisez-vous `psycopg-pool` dans `pyproject.toml`, `0014_checkin.sql` et le router dans `http_layer/app.py` ? Faut-il un mode autonome déployé séparément ? | Oui aux trois (modifications strictement limitées à celles-ci). |
+| 6 | Autorisez-vous `psycopg-pool` dans `pyproject.toml`, `0018_checkin.sql` et le router dans `http_layer/app.py`, et les 2 lignes de `tests/sqlite_store.py` qui ignorent les migrations `-- pg-only` (sinon ma migration casse tous vos tests SQLite) ? Faut-il un mode autonome déployé séparément ? | Oui aux trois (modifications strictement limitées à celles-ci). |
 | 7 | `test_ticket_tdev_and_capability_window` échoue avec 1 h d'écart (observation 3) : bug connu ? | Non diagnostiqué ; non corrigé. |
 | 9 | Numéros publics `TDEV-YYYY-NNNN` : collisions possibles dans une commande de plusieurs billets, capacité ≈ 10 000/an (`BUGS_3A.md`, observation 4). Connu ? | Non traité ; le seed de charge utilise des commandes de 5 billets avec nouvel essai. |
 | 10 | Le limiteur de `/api/scan` (120/min par IP) doit-il rester ainsi sachant que les terminaux d'un site partagent probablement une IP ? | `/api/checkin/*` n'y est pas soumis (limiteur par terminal, 600/min). |
 | 11 | Déploiement cible du Jour J : Linux ou Windows ? `uvicorn --workers` est défaillant sous Windows (`PERF.md` §8) ; proxy inverse devant plusieurs processus ? | Recommandation : N processus à 1 worker derrière un proxy inverse, ou `--workers N` sous Linux (à valider). |
 | 8 | Comment voulez-vous que les règles de postes (`checkin_station_rules`) soient alimentées : SQL, script, futur back-office ? | SQL/script documenté dans `API.md` ; pas d'endpoint d'édition. |
+| 9 | **L'inscription par mot de passe et par invitation échoue (HTTP 500) sur `main`** : `auth.service.signup` et `signup_with_invite` appellent `create_user(st, email, hash, nom)` alors que `store/users.py` attend un `UserPartial` (`BUGS_3A.md`, bug 4). Connu ? Comment les comptes des agents de scan seront-ils créés (Google OAuth ? invitation après correctif ?) | Je ne dépends pas de ces routes ; je valide les JWT existants. |
+| 10 | Les jetons d'accès JWT sont de courte durée (`CHANTIER3A_ACCESS_TOKEN_EXPIRE_MINUTES`). Un terminal hors ligne pendant des heures aura un jeton expiré à la synchro : le renouvellement (`/api/auth/refresh`) suffit-il, ou faut-il un jeton longue durée réservé aux terminaux ? | Le module valide les JWT du 3A tels quels ; l'app renouvelle le jeton avant d'envoyer (`API.md`). |
 
 ## Rodrigue (lead 3B)
 
@@ -37,8 +39,8 @@ Dernière mise à jour : 2026-09-30.
 
 | # | Question | Défaut retenu |
 |---|---|---|
-| 1 | `feature/bdd-romain` (schéma SERIAL/HMAC, vues analytiques) est-elle abandonnée au profit de `backend/migrations/` ? | Oui : seul le schéma des migrations 0001–0013 est pris en compte. |
-| 2 | Qui possède la numérotation des migrations (0014+) ? Conflit possible si d'autres PR ajoutent `0014`. | `0014_checkin.sql` ; renumérotée si besoin avant fusion. |
+| 1 | `feature/bdd-romain` (schéma SERIAL/HMAC, vues analytiques) est-elle abandonnée au profit de `backend/migrations/` ? | Oui : seul le schéma des migrations (0001–0017 actuellement) est pris en compte. |
+| 2 | Qui possède la numérotation des migrations (0018+) ? Conflit possible si d'autres PR ajoutent `0018`. | `0018_checkin.sql` ; renumérotée si besoin avant fusion. |
 | 3 | Volumes réels (participants, terminaux, scans/min) ? Purge/rétention des `scan_logs` après l'événement ? | Hypothèses de charge de `DESIGN.md` §4.1, mesures dans `PERF.md` ; aucune purge. |
 | 4 | Faut-il des vues pour le dashboard (stats par poste, conflits) ? | Non dans ce périmètre ; `/stats` seulement. |
 

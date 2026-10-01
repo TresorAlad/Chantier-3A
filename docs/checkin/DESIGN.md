@@ -13,7 +13,7 @@ Légende : **[VU]** constaté dans le code · **[CHOIX]** décision de conceptio
 
 | # | Constat [VU] | Conséquence pour le module |
 |---|---|---|
-| 1 | `migrate_postgres()` ne fait jamais de commit : la base reste vide (`BUGS_3A.md`, bug 1). | Mes tests appliquent `0014` via un helper qui valide explicitement. La migration elle-même reste un fichier SQL standard. |
+| 1 | `migrate_postgres()` ne faisait jamais de commit (bug 1 de `BUGS_3A.md`). **Corrigé en amont par Trésor** (commit `d3b4ca8`, « appliquer les migrations en autocommit »). | Mes tests appliquent la migration via leur propre helper qui valide explicitement : ils ne dépendent pas de ce correctif. |
 | 2 | Le `session_middleware` de `http_layer/app.py` s'exécute **avant toute route** (y compris `/api/checkin/*`) et utilise la connexion unique du `Store`. Un doublon sur `/api/scan` la bloque (bug 2). | Mon pool dédié protège *mes requêtes SQL*, **pas** le middleware. Tant que le bug 2 n'est pas corrigé, le module monté dans l'app 3A n'est pas fiable sous charge. D'où le mode « autonome » (§4.6). **Je corrige ma précédente affirmation** « le module n'est pas touché ». |
 | 3 | `Store.execute*()` fait un `commit()` à **chaque appel** (`store/store.py`). | Je n'utilise le `Store` que pour des **lectures** (sur une connexion du pool, hors transaction d'écriture). Toute écriture du module passe par mes propres transactions. |
 | 4 | Le 3B sérialise `decision.name` et `station.name` de Dart (`drift_scan_event_repository.dart`) : valeurs **camelCase** (`alreadyScanned`, `eventEntry`…), alors que les docs 3B écrivent `ALREADY_SCANNED`, `EVENT_ENTRY`. | `/sync` accepte les deux graphies et normalise (§2.8). À faire confirmer par Rodrigue. |
@@ -21,11 +21,13 @@ Légende : **[VU]** constaté dans le code · **[CHOIX]** décision de conceptio
 | 6 | `ScanRateLimitMiddleware` ne limite que les chemins `/api/scan*` (120/min/IP). | `/api/checkin/*` n'est pas limité. Je prévois un limiteur **par terminal** dans le module (§2.9). |
 | 7 | Le payload d'outbox 3B n'a pas `event_id`, `terminal_id`, `staff_id`, `qr_version`, `app_version`. | Champs à ajouter listés en §2.3 (demande à Rodrigue). |
 | 8 | `docs/V1-SCOPE.md`, `BILLETTERIE-3A-ARCHITECTURE.md`, `CLUSTERING.md` (cités par les README) sont introuvables. | Le périmètre « V1 en ligne uniquement » du 3A n'est pas vérifiable. Question à Trésor. |
-| 9 | Suite existante sur base migrée : 21 passed, 2 failed (bug 2 + observation 3). | Ma base de référence avant toute modification. |
+| 9 | Suite du 3A sur le `main` du 2026-09-30 (34 commits après mon premier constat) : **8 tests échouent avant toute modification de ma part**, en SQLite comme en PostgreSQL : l'inscription par mot de passe et par invitation est cassée (`BUGS_3A.md`, bug 4). | Mes tests ne passent plus par `/api/auth/signup` : ils créent l'utilisateur directement dans le store et génèrent un JWT. |
+| 10 | L'authentification du 3A est passée à des **JWT** (`auth.service.validate_access_token(store, config, token)`, clé = `Config.secret_key`), avec renouvellement par `POST /api/auth/refresh`. | L'adaptateur `Sessions3AAuth` reçoit la `Config` du 3A et appelle `validate_access_token`. Le jeton d'un terminal **expire** : l'app doit le renouveler (`API.md`). En mode autonome (`checkin.asgi`), la `Config` 3A est chargée (`CHANTIER3A_SECRET_KEY` doit être celle de l'API 3A). |
+| 11 | La suite du 3A tourne **sur SQLite par défaut** (`tests/sqlite_store.py`), qui applique **toutes** les migrations. Ma migration est PostgreSQL seule (triggers, `timestamptz`, `jsonb`, tableaux). | Elle est marquée `-- pg-only` (ligne 1) et `tests/sqlite_store.py` ignore ces fichiers (2 lignes). Mes tests s'**ignorent** sans `TEST_DATABASE_URL` PostgreSQL (jamais d'échec ni d'arrêt de la suite). |
 
 ---
 
-## 1. Modèle de données (migration `0014_checkin.sql`)
+## 1. Modèle de données (migration `0018_checkin.sql`)
 
 Principes [CHOIX] :
 - Nouvelles tables préfixées `checkin_` / `scan_` ; aucune table du 3A n'est modifiée.
@@ -432,7 +434,7 @@ Détail, pseudo-code et justification : **`ADR-001-conflits.md`**. Résumé :
 
 ### 4.2 Pool et modèle de concurrence
 - `psycopg_pool.ConnectionPool` **dédié** (par processus), séparé de la connexion unique du `Store` 3A. Taille : min 2, max 10 (`CHECKIN_DB_POOL_MIN/MAX`).
-- Endpoints en `def` (pas `async`) : le pool sync `psycopg_pool.ConnectionPool` + les fonctions 3A synchrones (`Store`, `validate_session`, `issuer_public_keys`) sont réutilisés tels quels ; FastAPI les exécute dans son *threadpool* (40 threads par défaut ≥ taille du pool). Un `async` avec `AsyncConnectionPool` ne pourrait pas réutiliser les fonctions 3A sans bloquer la boucle. À revoir **si** le profilage montre une saturation du threadpool.
+- Endpoints en `def` (pas `async`) : le pool sync `psycopg_pool.ConnectionPool` + les fonctions 3A synchrones (`Store`, `validate_access_token`, `issuer_public_keys`) sont réutilisés tels quels ; FastAPI les exécute dans son *threadpool* (40 threads par défaut ≥ taille du pool). Un `async` avec `AsyncConnectionPool` ne pourrait pas réutiliser les fonctions 3A sans bloquer la boucle. À revoir **si** le profilage montre une saturation du threadpool.
 - `psycopg-pool` est déjà dans le venv mais **absent de `pyproject.toml`** : je l'y ajoute (modification autorisée).
 
 ### 4.3 Écritures
@@ -469,7 +471,7 @@ Pré-calculé (`checkin_entitlements`), versionné, ETag, gzip mis en cache (§2
 ## 5. Authentification des terminaux
 
 - **Port** `TerminalAuth` (`checkin/ports.py`) : `authenticate(request) -> Principal(user_id, scopes, terminal_id?)`. Adaptateur par défaut `Sessions3AAuth` :
-  extrait le jeton avec `http_layer.session.extract_token`, valide la session avec `auth.service.validate_session` et le droit avec
+  extrait le jeton avec `http_layer.session.extract_token`, valide le JWT d'accès avec `auth.service.validate_access_token` (la `Config` du 3A fournit la clé) et le droit avec
   `auth.rbac.can_manage_event(…, ROLE_SCANNER | ROLE_ADMIN)`, **sur une connexion de mon pool** (et non la connexion partagée du `Store` 3A).
   La session Staff d'Amélie se branchera en écrivant un second adaptateur, sans toucher au reste.
 - Rôles : `scanner` → `/scan`, `/sync`, `/snapshot`, `/stats` ; `admin` → `/conflicts`, `/acknowledge`, `/logs`.

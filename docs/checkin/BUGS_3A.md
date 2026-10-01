@@ -4,6 +4,12 @@ Constatés le 2026-09-30 sur `main` (commit `208f0b6`), avec PostgreSQL 16 (Dock
 psycopg 3.3.6, Python 3.12.9. **Le module check-in ne corrige aucun de ces points**
 (règle : ne pas modifier le comportement existant du 3A). Chacun est reproductible ci-dessous.
 
+> **Mise à jour du 2026-10-01** (le `main` du 3A a avancé de 34 commits, dernier : `23ff158`) :
+> - **Bug 1 : corrigé en amont** par Trésor (commit `d3b4ca8`, « appliquer les migrations en autocommit »).
+> - **Bug 2 : toujours présent**, reproduit le 2026-10-01 sur PostgreSQL : un doublon sur `/api/scan` renvoie HTTP 500, puis la requête authentifiée suivante (`GET /api/auth/me`) renvoie aussi HTTP 500.
+> - **Bug 3 : toujours présent** (le test `tests/checkin/test_3a_visibility.py` reste en échec attendu sur ce `main`).
+> - **Bug 4 : nouveau** (inscription cassée), décrit en fin de fichier.
+
 Préparation commune (base jetable, jamais une vraie base : `conftest.py` fait un `TRUNCATE`
 de toutes les tables publiques) :
 
@@ -14,7 +20,7 @@ docker run -d --name pg-test -p 127.0.0.1:5433:5432 \
 export TEST_DATABASE_URL="postgresql://checkin_test:checkin_test@127.0.0.1:5433/chantier3a_test?sslmode=disable"
 ```
 
-## Bug 1 — `migrate_postgres()` n'enregistre rien (`backend/store/migrate.py`)
+## Bug 1 — `migrate_postgres()` n'enregistre rien (`backend/store/migrate.py`) — CORRIGÉ en amont
 
 **Symptôme.** La fonction renvoie `[1, 2, …, 13]` mais la base reste vide.
 
@@ -131,3 +137,22 @@ Des requêtes restent bloquées 15 à 30 s (`accept()` bloquant du socket partag
 > (+ deux points mineurs : numéros de série `TDEV-…` dupliqués possibles dans une grosse commande, et limiteur de /api/scan à 120/min par IP qui rejette 38 % d'un trafic nominal.)
 >
 > Détails dans `docs/checkin/BUGS_3A.md`. Tu peux confirmer ? Tu les corriges ou je te propose un correctif ? 🙏
+
+## Bug 4 (nouveau sur `main`, constaté le 2026-10-01) — l'inscription par mot de passe et par invitation échoue en HTTP 500
+
+`auth.service.signup` (ligne 116) et `signup_with_invite` (ligne 143) appellent `user_store.create_user(st, email, password_hash, name)`, mais
+`store/users.py` a été réécrit : `create_user(st, user: UserPartial)`. Résultat : `TypeError: create_user() takes 2 positional arguments but 4 were given`,
+masqué par la route en `internal_error` (HTTP 500).
+
+**Reproduction** (sans PostgreSQL : le mode par défaut de la suite 3A, SQLite) :
+
+```bash
+cd backend
+pytest tests/test_api_smoke.py::test_auth_flow tests/test_visitor_checkout.py::test_signup_with_invite_when_public_signup_off
+# -> 8 tests de la suite 3A échouent sur ce main (auth_flow, organizer flow, 5 de test_scan_and_tickets_e2e, signup_with_invite), avant toute modification
+```
+
+**Conséquence.** Tant que ce n'est pas corrigé, un agent de scan ne peut pas être créé par mot de passe ni par invitation (reste Google OAuth si utilisé).
+Les tests du module check-in créent leurs comptes directement dans le store pour ne pas en dépendre.
+
+**Correctif suggéré (non appliqué).** `create_user(st, UserPartial(email=norm, password_hash=ph, name=name.strip()))` dans les deux fonctions.

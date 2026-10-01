@@ -24,8 +24,10 @@ Préfixe commun : `/api/checkin`. Tout est en JSON UTF-8. Dates : ISO 8601 en UT
 
 ### Authentification
 
-`Authorization: Bearer <jeton de session>` — le jeton est celui du backend 3A : `POST /api/auth/login`
-(`{"email", "password"}`) renvoie `{"user": {...}, "token": "..."}`. L'utilisateur doit avoir le rôle **`scanner`** (ou plus)
+`Authorization: Bearer <jeton d'accès>` — le jeton est celui du backend 3A : `POST /api/auth/login` (`{"email", "password"}`) renvoie
+`{"user": {...}, "token": "<JWT d'accès>", "refresh_token": "..."}`. Le jeton d'accès **expire** (durée `CHANTIER3A_ACCESS_TOKEN_EXPIRE_MINUTES`) :
+l'app doit le **renouveler** avec `POST /api/auth/refresh` (`Authorization: Bearer <refresh_token>`), qui renvoie `{"token", "refresh_token"}` et
+**fait tourner** le jeton de renouvellement : conserver le nouveau, l'ancien est invalidé. L'utilisateur doit avoir le rôle **`scanner`** (ou plus)
 dans l'organisation de l'événement ; `admin`/`owner` pour les écrans superviseur.
 La session Staff définitive (Amélie) remplacera cet adaptateur sans changer ce contrat (port `TerminalAuth`).
 
@@ -218,7 +220,7 @@ Jamais de QR ni de donnée personnelle dans `message`.
 | 400 | `invalid_request` | enveloppe invalide (champ manquant, UUID mal formé…) | non : bug d'intégration |
 | 400 | `batch_empty` | `operations` vide | non |
 | 400 | `unknown_station` | poste non configuré (`/scan`) | non |
-| 401 | `unauthorized` | pas de session ou session expirée | **se reconnecter**, puis réessayer |
+| 401 | `unauthorized` | pas de jeton, jeton expiré ou invalide | **renouveler** le jeton (`/api/auth/refresh`), puis réessayer ; si le renouvellement échoue, se reconnecter |
 | 403 | `forbidden` | rôle insuffisant pour cet événement | non |
 | 403 | `terminal_revoked` | ce terminal a été révoqué | **non : arrêter l'envoi** et prévenir le superviseur |
 | 403 | `terminal_event_mismatch` | terminal déjà rattaché à un autre événement | non |
@@ -240,7 +242,7 @@ Codes d'un résultat `rejected` : `operation_invalid` (champ manquant ou invalid
 3. Sur chaque résultat : `accepted` / `already_processed` / `conflict` → **envoyé** ; `rejected` → **`REJECTED`** (ne plus réessayer, garder le motif).
 4. Sur erreur réseau, `429`, `503`, `5xx` : **réessayer tout le lot** avec attente exponentielle **1 s → 2 → 4 → … → 60 s plafonné, avec jitter ±20 %** ;
    recalculer `device_sent_at` à chaque tentative. Le rejeu est sans danger.
-5. Sur `401` : se reconnecter puis réessayer. Sur `413` : diviser le lot par deux. Sur `403 terminal_revoked` : **arrêter**, conserver l'outbox, alerter.
+5. Sur `401` : renouveler le jeton (`POST /api/auth/refresh`) puis réessayer ; si le renouvellement échoue, se reconnecter. Sur `413` : diviser le lot par deux. Sur `403 terminal_revoked` : **arrêter**, conserver l'outbox, alerter.
 6. Ne jamais réécrire un scan local déjà fait : le serveur est l'autorité en cas de conflit, l'historique local est conservé.
 
 ---
