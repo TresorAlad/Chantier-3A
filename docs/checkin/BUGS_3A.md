@@ -1,0 +1,82 @@
+# Bugs constatés dans le 3A (à traiter par Trésor)
+
+Constatés le 2026-09-30 sur `main` (commit `208f0b6`), avec PostgreSQL 16 (Docker) et
+psycopg 3.3.6, Python 3.12.9. **Le module check-in ne corrige aucun de ces points**
+(règle : ne pas modifier le comportement existant du 3A). Chacun est reproductible ci-dessous.
+
+Préparation commune (base jetable, jamais une vraie base : `conftest.py` fait un `TRUNCATE`
+de toutes les tables publiques) :
+
+```bash
+docker run -d --name pg-test -p 127.0.0.1:5433:5432 \
+  -e POSTGRES_USER=checkin_test -e POSTGRES_PASSWORD=checkin_test \
+  -e POSTGRES_DB=chantier3a_test postgres:16-alpine
+export TEST_DATABASE_URL="postgresql://checkin_test:checkin_test@127.0.0.1:5433/chantier3a_test?sslmode=disable"
+```
+
+## Bug 1 — `migrate_postgres()` n'enregistre rien (`backend/store/migrate.py`)
+
+**Symptôme.** La fonction renvoie `[1, 2, …, 13]` mais la base reste vide.
+
+**Reproduction.**
+
+```bash
+cd backend
+python - <<'EOF'
+import os, psycopg
+from store.migrate import migrate_postgres
+url = os.environ["TEST_DATABASE_URL"]
+print(migrate_postgres(url))                       # -> [1, ..., 13]
+with psycopg.connect(url) as c:
+    print(c.execute("select count(*) from pg_tables where schemaname='public'").fetchone())  # -> (0,)
+EOF
+```
+
+**Cause probable (vue dans le code).** La connexion est ouverte sans `autocommit` ; le premier
+`conn.execute(...)` ouvre une transaction implicite ; `with conn.transaction():` n'est alors
+qu'un *savepoint* ; `conn.close()` annule tout. Aucun `conn.commit()` n'existe dans la fonction.
+
+**Conséquence.** `billetterie-api migrate`, `open_postgres()` et donc toute la suite de tests
+échouent sur une base vierge (`relation "key_vault" does not exist`). Je ne sais pas pourquoi
+cela semblerait fonctionner sur votre machine : **à confirmer** (autre version de psycopg ? base
+déjà migrée autrement ?).
+
+**Correctif suggéré (non appliqué).** `psycopg.connect(database_url, autocommit=True)`, ou un
+`conn.commit()` après chaque migration.
+
+## Bug 2 — un doublon de scan « empoisonne » la connexion partagée (`store/admissions.py`, `store/store.py`)
+
+**Symptôme.** Après le 1er doublon sur `POST /api/scan`, toutes les requêtes suivantes échouent avec
+`psycopg.errors.InFailedSqlTransaction: current transaction is aborted`.
+
+**Reproduction.** Le test existant le met en évidence (une fois la base migrée, cf. bug 1) :
+
+```bash
+cd backend
+pytest tests/test_scan_and_tickets_e2e.py::test_scan_admit_duplicate_and_wrong_event
+# -> échoue à la ligne 121 (2e scan du même billet) : InFailedSqlTransaction
+```
+
+**Cause (vue dans le code).** `try_insert_admitted()` exécute un `INSERT` qui viole l'index unique
+`idx_admissions_admitted_once`, attrape l'exception et renvoie `False`. Le `Store` n'a qu'une seule
+connexion (`_pg`) et ne fait **jamais de `rollback`** : la transaction reste en état d'erreur pour
+toutes les requêtes suivantes, y compris celles du `session_middleware` de `http_layer/app.py`
+(`auth_svc.validate_session`). **Toute requête authentifiée de l'API est donc bloquée** jusqu'au
+redémarrage du processus.
+
+**Correctif suggéré (non appliqué).** `INSERT … ON CONFLICT DO NOTHING` (plus de dépendance à
+l'exception), et/ou `rollback` dans `Store.execute_rowcount` en cas d'exception.
+
+## Observation 3 — test de fenêtre de capability (cause non établie)
+
+`tests/test_scan_and_tickets_e2e.py::test_ticket_tdev_and_capability_window` échoue :
+`assert 1790763229 == 1790759629` (écart exact de 3600 s = 1 h entre `exp` et `ends_at`).
+Je n'ai pas déterminé si c'est un bug du code ou un effet de fuseau horaire/de l'heure d'été de ma
+machine. **Non diagnostiqué.**
+
+## Message prêt à envoyer à Trésor
+
+> Salut Trésor, en branchant le module check-in j'ai trouvé 2 points dans le 3A (rien modifié de mon côté) :
+> 1. `migrate_postgres()` (store/migrate.py) renvoie [1..13] mais ne commit pas : avec psycopg 3.3.6 la base reste vide.
+> 2. Après un doublon sur POST /api/scan, la connexion unique du Store reste en transaction avortée (pas de rollback) : toutes les requêtes authentifiées suivantes font `InFailedSqlTransaction`. Le test existant `test_scan_admit_duplicate_and_wrong_event` le reproduit.
+> Détails et commandes dans docs/checkin/BUGS_3A.md (branche feat/checkin). Tu peux confirmer / préférer les corriger toi-même ?
