@@ -74,6 +74,31 @@ l'exception), et/ou `rollback` dans `Store.execute_rowcount` en cas d'exception.
 Je n'ai pas déterminé si c'est un bug du code ou un effet de fuseau horaire/de l'heure d'été de ma
 machine. **Non diagnostiqué.**
 
+## Bug 3 — le travail du `Store` reste non validé tant qu'une autre écriture ne fait pas de `commit` (`store/store.py`)
+
+**Symptôme.** Juste après `POST /api/orders/{id}/mark-paid`, les billets émis sont **invisibles** pour toute
+autre connexion PostgreSQL (le module check-in, un outil SQL, un dashboard…), jusqu'à la prochaine écriture du `Store`.
+
+**Reproduction.** Test marqué `xfail` : `backend/tests/checkin/test_3a_visibility.py`.
+
+```bash
+cd backend
+pytest tests/checkin/test_3a_visibility.py -rx   # XFAIL tant que le bug existe (XPASS une fois corrigé)
+```
+
+**Cause (vue dans le code et mesurée).** `Store.fetchone/fetchall` ne valident jamais, donc une lecture ouvre une
+transaction implicite (`transaction_status = INTRANS`). Un `with store.transaction():` exécuté ensuite n'est plus
+qu'un *savepoint* : rien n'est validé à sa sortie. Seul le prochain `Store.execute*()` (qui fait `commit()`) valide
+tout ce qui était en attente.
+
+**Conséquence.** Sur un site calme, un billet acheté peut rester invisible de l'extérieur plusieurs secondes ou
+minutes. Pour le check-in : un billet tout juste acheté est vu `unknown` par le module (qui lit avec sa propre
+connexion). Les tests du module valident explicitement la connexion du 3A après leur préparation
+(fixture `commit_3a`) ; **ce contournement n'existe pas en production.**
+
+**Correctif suggéré (non appliqué).** `commit()` à la sortie de `Store.transaction()` (si on est au niveau le plus
+externe) et `rollback()` sur exception ; ou `autocommit=True` avec des transactions explicites.
+
 ## Message prêt à envoyer à Trésor
 
 > Salut Trésor, en branchant le module check-in j'ai trouvé 2 points dans le 3A (rien modifié de mon côté) :
