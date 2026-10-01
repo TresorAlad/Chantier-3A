@@ -80,6 +80,8 @@ def checkin_rt(demo_store, clock):
     cfg = dataclasses.replace(
         CheckinConfig.from_env(TEST_DATABASE_URL),
         snapshot_ttl_seconds=0,
+        stats_ttl_seconds=0,
+        keys_ttl_seconds=0,
         rate_limit_per_terminal=0,
         pool_min=1,
         pool_max=10,

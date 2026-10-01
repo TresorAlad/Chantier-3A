@@ -16,6 +16,9 @@ Dernière mise à jour : 2026-09-30.
 | 5 | `tickets.voided_at` est-il toujours renseigné quand un billet est annulé/remboursé ? Y a-t-il un historique de statuts ? | Statut non valide sans `voided_at` ⇒ considéré annulé **avant** le scan (prudent). |
 | 6 | Autorisez-vous `psycopg-pool` dans `pyproject.toml`, `0014_checkin.sql` et le router dans `http_layer/app.py` ? Faut-il un mode autonome déployé séparément ? | Oui aux trois (modifications strictement limitées à celles-ci). |
 | 7 | `test_ticket_tdev_and_capability_window` échoue avec 1 h d'écart (observation 3) : bug connu ? | Non diagnostiqué ; non corrigé. |
+| 9 | Numéros publics `TDEV-YYYY-NNNN` : collisions possibles dans une commande de plusieurs billets, capacité ≈ 10 000/an (`BUGS_3A.md`, observation 4). Connu ? | Non traité ; le seed de charge utilise des commandes de 5 billets avec nouvel essai. |
+| 10 | Le limiteur de `/api/scan` (120/min par IP) doit-il rester ainsi sachant que les terminaux d'un site partagent probablement une IP ? | `/api/checkin/*` n'y est pas soumis (limiteur par terminal, 600/min). |
+| 11 | Déploiement cible du Jour J : Linux ou Windows ? `uvicorn --workers` est défaillant sous Windows (`PERF.md` §8) ; proxy inverse devant plusieurs processus ? | Recommandation : N processus à 1 worker derrière un proxy inverse, ou `--workers N` sous Linux (à valider). |
 | 8 | Comment voulez-vous que les règles de postes (`checkin_station_rules`) soient alimentées : SQL, script, futur back-office ? | SQL/script documenté dans `API.md` ; pas d'endpoint d'édition. |
 
 ## Rodrigue (lead 3B)
@@ -36,7 +39,7 @@ Dernière mise à jour : 2026-09-30.
 |---|---|---|
 | 1 | `feature/bdd-romain` (schéma SERIAL/HMAC, vues analytiques) est-elle abandonnée au profit de `backend/migrations/` ? | Oui : seul le schéma des migrations 0001–0013 est pris en compte. |
 | 2 | Qui possède la numérotation des migrations (0014+) ? Conflit possible si d'autres PR ajoutent `0014`. | `0014_checkin.sql` ; renumérotée si besoin avant fusion. |
-| 3 | Volumes réels (participants, terminaux, scans/min) ? Purge/rétention des `scan_logs` après l'événement ? | Hypothèses de charge de `DESIGN.md` §4.1 ; aucune purge. |
+| 3 | Volumes réels (participants, terminaux, scans/min) ? Purge/rétention des `scan_logs` après l'événement ? | Hypothèses de charge de `DESIGN.md` §4.1, mesures dans `PERF.md` ; aucune purge. |
 | 4 | Faut-il des vues pour le dashboard (stats par poste, conflits) ? | Non dans ce périmètre ; `/stats` seulement. |
 
 ## Daniel (sécurité / signature QR)
@@ -83,6 +86,7 @@ Dernière mise à jour : 2026-09-30.
 | 2 | Terminal révoqué : refuse-t-on aussi les scans faits **avant** la révocation mais non encore synchronisés ? | Oui, tout nouveau lot refusé (prudent) ; anciens scans restent journalisés. |
 | 3 | Scénarios de fraude à couvrir (2 terminaux, horloge truquée, rejeu de lot, QR copié) et simulations Jour J. | Couverts : rejeu (idempotence), horloge (`clock_suspect`), double admission (conflit). **Non couvert** : QR copié présenté à deux portes hors ligne simultanément (seulement *détecté* a posteriori). |
 | 4 | Limite de débit par terminal/IP (les portes partagent probablement une IP). | 600/min par terminal ; pas de limite par IP seule. |
+| 6 | Acceptez-vous les compromis de cache (clé publique révoquée acceptée jusqu'à 30 s par processus ; cache d'authentification désactivé par défaut) ? | `CHECKIN_KEYS_TTL_SECONDS=30`, `CHECKIN_AUTH_CACHE_SECONDS=0`. |
 | 5 | Qui peut révoquer un terminal et comment (endpoint ? SQL ?) | SQL documenté ; pas d'endpoint. |
 
 ## Chantier 2 (Shop)

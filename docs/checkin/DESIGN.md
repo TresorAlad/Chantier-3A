@@ -212,7 +212,6 @@ Pas de trigger sur les tables 3A (ce serait modifier leur comportement) : le raf
 | `scan_logs` | `(ticket_id, station, corrected_evaluated_at, operation_id) WHERE is_claim` (partiel) | classement des prétendants d'un (ticket, station) pendant la résolution — **chemin critique** |
 | `scan_logs` | `(event_id, log_id)` | `/logs` (pagination par curseur sur `log_id`, filtre événement) |
 | `scan_logs` | `(terminal_id, server_received_at DESC)` | `/logs?terminal_id=`, `/stats` (dernière activité par terminal) |
-| `scan_logs` | `(event_id, station, server_decision)` *(à valider par EXPLAIN — optionnel)* | `/stats` (`GROUP BY station, server_decision`) |
 | `station_consumptions` | PK `(ticket_id, station, use_index)` | consommation atomique, détection d'épuisement |
 | `station_consumptions` | `(event_id, station)` | `/stats` (compte par poste), snapshot (`uses`) |
 | `station_consumptions` | `(winning_log_id)` | lien log → consommation (audit) |
@@ -224,7 +223,8 @@ Pas de trigger sur les tables 3A (ce serait modifier leur comportement) : le raf
 
 Chaque index coûte une écriture : à 300 scans/min c'est négligeable, mais **seuls les index de
 ce tableau sont créés**, et TDEV-56 vérifie chacun par `EXPLAIN (ANALYZE, BUFFERS)` (`PERF.md`).
-À 20 000 lignes, un scan séquentiel reste rapide : les index « optionnels » seront retirés s'ils ne servent pas.
+**Mesuré (`PERF.md` §5)** : deux requêtes restent en balayage séquentiel **volontairement** (`/logs?ticket_id=` et l'agrégat de `/stats`) : les index qui les supprimeraient
+coûtent ~15 % d'écriture pour des lectures rares ou mises en cache (`/stats` : cache de 2 s). L'index « optionnel » sur `(event_id, station, server_decision)` n'a donc **pas** été créé.
 
 ### 1.8 Synchronisation avec `admissions` (3A) — **volontairement non faite**
 
@@ -440,6 +440,7 @@ Détail, pseudo-code et justification : **`ADR-001-conflits.md`**. Résumé :
   (`COPY` est plus rapide en volume mais ne supporte pas `ON CONFLICT` ; inutile à 200 lignes.)
 - **Une transaction par lot** (pas par groupe) : les verrous sont pris dans l'ordre trié, ce qui exclut les deadlocks ; la durée de détention reste de l'ordre de la
   dizaine de millisecondes pour 200 opérations. Une transaction par groupe (ticket, station) ajouterait ~200 `COMMIT`/`fsync` par lot. Si le profilage montre des attentes de verrou, repli : sous-lots de 50.
+- **Les résolutions d'un lot sont écrites en 2 requêtes pour tout le lot** (consommations, conflits), pas 2 par groupe (billet, poste) : mesuré, c'était le principal gain (lot de 200 : ~430 → ~120 ms).
 - `SET LOCAL lock_timeout = '2s'` ; dépassement → `503 service_busy` + `Retry-After`.
 
 ### 4.4 Lectures
@@ -448,16 +449,20 @@ Pas de N+1 : un lot charge en **3 requêtes** les billets concernés (`= ANY($1)
 ### 4.5 Snapshot
 Pré-calculé (`checkin_entitlements`), versionné, ETag, gzip mis en cache (§2.1) ; rafraîchi au plus toutes les 15 s par un seul processus.
 
-### 4.6 Déploiement : workers et mode autonome
+### 4.6 Déploiement : processus et mode autonome
 - `billetterie-api serve` lance `uvicorn.run(app)` **sans workers** (`cli.py`) : inchangé.
-- Le module expose `checkin.asgi:app` (**application autonome** : routeur check-in + authentification `TerminalAuth`, **sans** le `session_middleware` du 3A) :
-  `uvicorn checkin.asgi:app --workers 4`. Le pool est **par processus** : connexions totales = `workers × CHECKIN_DB_POOL_MAX` (≤ `max_connections` − connexions du 3A).
-- En mode **monté** (router ajouté à `http_layer/app.py`, comme demandé) le module hérite du middleware 3A : il dépend de la correction du bug 2 (`BUGS_3A.md`). Je recommande le mode autonome pour le Jour J, sans changer le code : même module, deux points d'entrée.
-  (Sous Windows, `gunicorn` n'existe pas : `uvicorn --workers` suffit.)
+- Le module expose `checkin.asgi:app` (**application autonome** : routeur check-in + authentification `TerminalAuth`, **sans** le `session_middleware` du 3A).
+  Le pool de connexions est **par processus** : connexions totales = processus × `CHECKIN_DB_POOL_MAX` (≤ `max_connections` − connexions du 3A).
+- En mode **monté** (router ajouté à `http_layer/app.py`, comme demandé) le module hérite du middleware 3A : il dépend de la correction du bug 2 (`BUGS_3A.md`).
+  **Je recommande le mode autonome pour le Jour J**, sans changer le code : même module, deux points d'entrée.
+- **Plusieurs processus** : nécessaires pour tenir une rafale de synchro sans dégrader les scans (`PERF.md` §3 : p95 des scans 698 → 216 ms).
+  **Mesuré : `uvicorn --workers N` est défaillant sous Windows** (une requête sur ~50 reste bloquée 15 à 30 s : `accept()` bloquant du socket partagé, `PERF.md` §8).
+  Recommandation : sous Linux `--workers N` (à valider) ; sous Windows, ou par prudence, **N processus à 1 worker sur des ports différents derrière un proxy inverse**.
+  Attendre que tous les processus aient ouvert leur pool avant d'ouvrir le trafic (`/health` ne prouve qu'un processus).
 
 ### 4.7 Mesure
-Locust dans `backend/tests/load/` (scans en ligne + rafales de synchro) ; `docs/checkin/PERF.md` : p50/p95/p99, débit, erreurs, **avant/après** (référence « avant » = version naïve : connexion unique, `try/except`, lot ligne par ligne), plans `EXPLAIN (ANALYZE, BUFFERS)` de chaque requête chaude.
-Locust n'est pas installé : je l'ajouterai dans le venv (dépendance `dev`) au moment de TDEV-56, après accord.
+`backend/tests/load/` : `seed.py` (3 000 billets signés), `loadgen.py` (générateur Python pur), `locustfile.py` (mêmes scénarios, **non exécuté ici** : Windows bloque `gevent`),
+`bench_bulk.py`, `explain.py`. Résultats, avant/après, plans `EXPLAIN (ANALYZE, BUFFERS)` et limites : [`PERF.md`](PERF.md).
 
 ---
 

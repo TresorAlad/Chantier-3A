@@ -10,7 +10,7 @@ from typing import Any
 
 from psycopg_pool import ConnectionPool
 
-from checkin.adapters import Ring3AKeySource, Sessions3AAuth
+from checkin.adapters import CachedAuth, CachedKeySource, Ring3AKeySource, Sessions3AAuth
 from checkin.config import CheckinConfig
 from checkin.db import open_pool
 from checkin.ports import Clock, KeySource, TerminalAuth, utc_now
@@ -68,11 +68,17 @@ def build_runtime(
 ) -> Runtime:
     """Build the default runtime (3A sessions + 3A key ring) from the environment."""
     cfg = cfg or CheckinConfig.from_env(database_url)
+    auth = overrides.get("auth") or Sessions3AAuth(session_secret, config3a)
+    if cfg.auth_cache_seconds > 0:
+        auth = CachedAuth(auth, cfg.auth_cache_seconds)
+    keys = overrides.get("keys") or Ring3AKeySource()
+    if cfg.keys_ttl_seconds > 0:
+        keys = CachedKeySource(keys, cfg.keys_ttl_seconds)
     return Runtime(
         cfg=cfg,
         pool=open_pool(cfg),
-        auth=overrides.get("auth") or Sessions3AAuth(session_secret, config3a),
-        keys=overrides.get("keys") or Ring3AKeySource(),
+        auth=auth,
+        keys=keys,
         clock=overrides.get("clock") or utc_now,
     )
 

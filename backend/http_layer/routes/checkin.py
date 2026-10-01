@@ -168,9 +168,12 @@ def acknowledge(conflict_id: int, body: AcknowledgeRequest, request: Request):
 def stats(request: Request, event_id: str = Query(min_length=1, max_length=64)):
     """Live counters per station, conflicts and terminals (no personal data)."""
     with _session(request, event_id=event_id, role="scanner") as (rt, conn, _p):
-        raw = repository.stats(conn, event_id)
-        now = rt.clock()
-    return sync_service.stats_view(event_id, now, raw)
+        cached = service.STATS_CACHE.get(event_id, rt.cfg.stats_ttl_seconds)
+        if cached is not None:
+            return cached
+        payload = sync_service.stats_view(event_id, rt.clock(), repository.stats(conn, event_id))
+        service.STATS_CACHE.put(event_id, payload)
+    return payload
 
 
 @router.get("/snapshot")

@@ -99,6 +99,25 @@ connexion). Les tests du module valident explicitement la connexion du 3A après
 **Correctif suggéré (non appliqué).** `commit()` à la sortie de `Store.transaction()` (si on est au niveau le plus
 externe) et `rollback()` sur exception ; ou `autocommit=True` avec des transactions explicites.
 
+## Observation 4 — deux billets d'une même commande peuvent tirer le même numéro public (`store/pass_serial.py`)
+
+`next_pass_ref()` tire 4 chiffres au hasard et vérifie en base qu'ils sont libres, mais `orders/service.py` (`mint`) alloue **tous** les numéros
+d'une commande **avant d'insérer le moindre billet** : le contrôle ne voit pas les numéros de la même commande. Deux billets de la même
+commande peuvent donc obtenir le même `TDEV-YYYY-NNNN`, ce qui viole `tickets_serial_key` (`UniqueViolation`, commande non réglée).
+Risque de collision au sein d'une commande de *n* billets parmi 10 000 numéros : ≈ 1 − e^(−n²/20 000) — **≈ 0,1 % pour 5 billets, ≈ 39 % pour 100**.
+Reproduction : `tests/load/seed.py` avec des commandes de 100 billets (le seed utilise 5 et réessaie).
+Autre limite de conception (pas un bug) : 4 chiffres = **≈ 10 000 billets par an au maximum**.
+
+## Observation 5 — le limiteur de `/api/scan` est très bas pour un site derrière une seule IP (`http_layer/middleware/rate_limit.py`)
+
+`ScanRateLimitMiddleware` : 120 requêtes par minute **par IP** sur `/api/scan*`. La charge nominale supposée (300 scans/min) depuis un même site
+(probablement une seule IP publique par NAT) en rejette **38 %** (HTTP 429), mesuré (`PERF.md` §7). `/api/checkin/*` n'y est pas soumis
+(limiteur par terminal dans le module).
+
+## Observation 6 (environnement, pas un défaut du 3A ni du module) — `uvicorn --workers` sous Windows
+
+Des requêtes restent bloquées 15 à 30 s (`accept()` bloquant du socket partagé entre workers). Détails et preuves : `PERF.md` §8.
+
 ## Message prêt à envoyer à Trésor (version courte, WhatsApp)
 
 > Salut Trésor 👋 J'ai trouvé 3 problèmes dans le backend 3A (je n'ai rien modifié chez toi) :
@@ -108,5 +127,7 @@ externe) et `rollback()` sur exception ; ou `autocommit=True` avec des transacti
 > 2️⃣ Après un doublon sur `POST /api/scan`, la connexion reste cassée : toutes les requêtes suivantes plantent (`InFailedSqlTransaction`) jusqu'au redémarrage. Le test `test_scan_admit_duplicate_and_wrong_event` le montre.
 >
 > 3️⃣ Après un paiement, les billets restent non validés côté base tant qu'une autre écriture du Store ne fait pas `commit` : une autre connexion (check-in, dashboard) ne les voit pas tout de suite. Test qui le montre : `tests/checkin/test_3a_visibility.py` (branche feat/checkin).
+>
+> (+ deux points mineurs : numéros de série `TDEV-…` dupliqués possibles dans une grosse commande, et limiteur de /api/scan à 120/min par IP qui rejette 38 % d'un trafic nominal.)
 >
 > Détails dans `docs/checkin/BUGS_3A.md`. Tu peux confirmer ? Tu les corriges ou je te propose un correctif ? 🙏

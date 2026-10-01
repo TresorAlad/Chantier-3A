@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import json
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from datetime import datetime
@@ -78,6 +79,34 @@ def verify_capability(
 # ── Shared: persist a resolution ────────────────────────────────────────────
 
 
+def resolution_rows(
+    *,
+    event_id: str,
+    ticket_id: str,
+    station: str,
+    resolution: domain.Resolution,
+    log_ids: dict[str, int],
+) -> tuple[list[tuple], list[tuple]]:
+    """Consumption rows and conflict rows of one (ticket, station) group, ready for the bulk upserts."""
+    consumptions = [
+        (ticket_id, station, i, event_id, log_ids[c.operation_id], c.corrected_at)
+        for i, c in enumerate(resolution.assigned)
+    ]
+    conflicts = [
+        (
+            event_id,
+            ticket_id,
+            station,
+            log_ids[s.winning_operation_id] if s.winning_operation_id else None,
+            log_ids[s.losing_operation_id],
+            s.type,
+            s.clock_suspect,
+        )
+        for s in resolution.conflicts
+    ]
+    return consumptions, conflicts
+
+
 def apply_resolution(
     conn: psycopg.Connection,
     *,
@@ -88,28 +117,11 @@ def apply_resolution(
     log_ids: dict[str, int],
 ) -> None:
     """Write consumptions and conflicts of one (ticket, station) group (idempotent upserts)."""
-    repository.upsert_consumptions(
-        conn,
-        [
-            (ticket_id, station, i, event_id, log_ids[c.operation_id], c.corrected_at)
-            for i, c in enumerate(resolution.assigned)
-        ],
+    consumptions, conflicts = resolution_rows(
+        event_id=event_id, ticket_id=ticket_id, station=station, resolution=resolution, log_ids=log_ids
     )
-    repository.upsert_conflicts(
-        conn,
-        [
-            (
-                event_id,
-                ticket_id,
-                station,
-                log_ids[s.winning_operation_id] if s.winning_operation_id else None,
-                log_ids[s.losing_operation_id],
-                s.type,
-                s.clock_suspect,
-            )
-            for s in resolution.conflicts
-        ],
-    )
+    repository.upsert_consumptions(conn, consumptions)
+    repository.upsert_conflicts(conn, conflicts)
 
 
 # ── Online scan (TDEV-54) ───────────────────────────────────────────────────
@@ -151,11 +163,12 @@ def online_scan(rt: Runtime, conn: psycopg.Connection, principal: Principal, req
     op_id = req.operation_id or uuid.uuid4()
     p_hash = _online_hash(req, station)
 
-    stored = repository.find_operations(conn, [op_id]).get(str(op_id))
-    if stored is not None:
-        if bytes(stored["payload_hash"]) != p_hash:
-            raise ApiError(409, "operation_id_reuse", "operation_id was already used for another scan")
-        return _replay_response(stored, station)
+    if req.operation_id is not None:  # a server-generated id can never be a replay
+        stored = repository.find_operations(conn, [op_id]).get(str(op_id))
+        if stored is not None:
+            if bytes(stored["payload_hash"]) != p_hash:
+                raise ApiError(409, "operation_id_reuse", "operation_id was already used for another scan")
+            return _replay_response(stored, station)
 
     payload, decision, reason, sig_ok, audit_tid = verify_capability(
         req.capability,
@@ -367,3 +380,27 @@ def snapshot(
     packed = gzip.compress(raw, compresslevel=5)
     SNAPSHOT_CACHE.put(etag, (raw, packed))
     return etag, raw, packed
+
+
+class StatsCache:
+    """Per-process TTL cache of ``/stats`` payloads (the aggregate scans the whole journal of an event)."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, tuple[float, dict]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, event_id: str, ttl: float) -> dict | None:
+        """Return a cached payload younger than ``ttl`` seconds, else ``None``."""
+        if ttl <= 0:
+            return None
+        with self._lock:
+            hit = self._data.get(event_id)
+        return hit[1] if hit and time.monotonic() - hit[0] < ttl else None
+
+    def put(self, event_id: str, payload: dict) -> None:
+        """Store a freshly computed payload."""
+        with self._lock:
+            self._data[event_id] = (time.monotonic(), payload)
+
+
+STATS_CACHE = StatsCache()

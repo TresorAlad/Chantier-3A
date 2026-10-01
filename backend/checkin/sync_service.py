@@ -15,7 +15,7 @@ from checkin.domain import Claim
 from checkin.ports import Principal
 from checkin.runtime import Runtime
 from checkin.schemas import SyncOperation, SyncRequest
-from checkin.service import ApiError, apply_resolution, verify_capability
+from checkin.service import ApiError, resolution_rows, verify_capability
 from tickets import capability as cap
 
 
@@ -305,20 +305,24 @@ def sync_batch(rt: Runtime, conn: psycopg.Connection, principal: Principal, req:
                         raise ApiError(503, "service_busy", "concurrent duplicate, retry", {"Retry-After": "1"})
                     replayed[p.idx] = repository.find_operations(conn, [p.op.operation_id])[p.oid]
 
+            # One statement per table for the WHOLE batch (not two per group): 2 round trips, not ~400.
+            consumption_rows: list[tuple] = []
+            conflict_rows: list[tuple] = []
             for gkey, res in resolutions.items():
                 log_ids = {c.operation_id: c.log_id for c in existing.get(gkey, []) if c.log_id is not None}
                 log_ids.update({p.oid: inserted[p.oid] for p in claimants_of[gkey]})
-                apply_resolution(
-                    conn, event_id=event_id, ticket_id=gkey[0], station=gkey[1], resolution=res, log_ids=log_ids
+                cons, confl = resolution_rows(
+                    event_id=event_id, ticket_id=gkey[0], station=gkey[1], resolution=res, log_ids=log_ids
                 )
-            repository.upsert_conflicts(
-                conn,
-                [
-                    (event_id, p.op.ticket_id, p.station, None, inserted[p.oid], p.elig.conflict_type, p.clock.suspect)
-                    for p in new_ops
-                    if p.reported == domain.VALID and not p.claims and p.elig.conflict_type and p.oid in inserted
-                ],
-            )
+                consumption_rows += cons
+                conflict_rows += confl
+            conflict_rows += [
+                (event_id, p.op.ticket_id, p.station, None, inserted[p.oid], p.elig.conflict_type, p.clock.suspect)
+                for p in new_ops
+                if p.reported == domain.VALID and not p.claims and p.elig.conflict_type and p.oid in inserted
+            ]
+            repository.upsert_consumptions(conn, consumption_rows)
+            repository.upsert_conflicts(conn, conflict_rows)
             repository.touch_batch(conn, req.terminal_id, offset_ms, received, req.pending_count)
             winner_logs = repository.log_ids_to_terminals(
                 conn, [st["winning_log_id"] for st in replayed.values() if st["winning_log_id"]]

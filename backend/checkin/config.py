@@ -29,6 +29,9 @@ class CheckinConfig:
     stations: tuple[str, ...] = DEFAULT_STATIONS
     sync_max_batch: int = 500
     snapshot_ttl_seconds: int = 15
+    stats_ttl_seconds: int = 2
+    keys_ttl_seconds: int = 30
+    auth_cache_seconds: int = 0
     snapshot_page_default: int = 2000
     snapshot_page_max: int = 5000
     lock_timeout_ms: int = 2000
@@ -55,6 +58,9 @@ class CheckinConfig:
             stations=stations,
             sync_max_batch=_int("CHECKIN_SYNC_MAX_BATCH", 500),
             snapshot_ttl_seconds=_int("CHECKIN_SNAPSHOT_TTL_SECONDS", 15),
+            stats_ttl_seconds=_int("CHECKIN_STATS_TTL_SECONDS", 2),
+            keys_ttl_seconds=_int("CHECKIN_KEYS_TTL_SECONDS", 30),
+            auth_cache_seconds=_int("CHECKIN_AUTH_CACHE_SECONDS", 0),
             lock_timeout_ms=_int("CHECKIN_LOCK_TIMEOUT_MS", 2000),
             rate_limit_per_terminal=_int("CHECKIN_RATE_LIMIT_PER_TERMINAL", 600),
             clock=ClockThresholds(

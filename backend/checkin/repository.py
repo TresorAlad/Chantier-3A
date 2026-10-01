@@ -20,8 +20,27 @@ from store.timeutil import text_to_null_time
 # ── Terminals ───────────────────────────────────────────────────────────────
 
 
-def register_terminal(conn: psycopg.Connection, terminal_id: UUID, event_id: str, user_id: str | None) -> dict:
-    """Register a terminal on first call, else refresh ``last_seen_at``; return its row."""
+def register_terminal(
+    conn: psycopg.Connection,
+    terminal_id: UUID,
+    event_id: str,
+    user_id: str | None,
+    refresh_after_seconds: int = 30,
+) -> dict:
+    """Register a terminal on first call; refresh ``last_seen_at`` at most every ``refresh_after_seconds``.
+
+    The steady state is a single indexed SELECT (no write, hence no WAL flush per scan).
+    """
+    row = conn.execute(
+        """
+        SELECT terminal_id, event_id, revoked_at,
+               (now() - last_seen_at) < make_interval(secs => %s) AS fresh
+        FROM checkin_terminals WHERE terminal_id = %s
+        """,
+        (refresh_after_seconds, terminal_id),
+    ).fetchone()
+    if row is not None and row["fresh"]:
+        return row
     return conn.execute(
         """
         INSERT INTO checkin_terminals (terminal_id, event_id, registered_by)
@@ -330,23 +349,31 @@ def list_logs(
 # ── Snapshot ────────────────────────────────────────────────────────────────
 
 _REFRESH_SQL = """
-    WITH computed AS (
+    WITH types AS (  -- allowed stations are computed once per ticket TYPE, not once per ticket
+        SELECT tt.id AS ticket_type_id,
+               ARRAY(SELECT x.s FROM (
+                         SELECT r.station AS s FROM checkin_station_rules r
+                         WHERE r.event_id = %(event)s AND r.ticket_type_id = tt.id AND r.max_uses > 0
+                         UNION
+                         SELECT 'EVENT_ENTRY' WHERE NOT EXISTS (
+                             SELECT 1 FROM checkin_station_rules r
+                             WHERE r.event_id = %(event)s AND r.ticket_type_id = tt.id AND r.station = 'EVENT_ENTRY')
+                     ) x ORDER BY x.s) AS stations
+        FROM ticket_types tt WHERE tt.event_id = %(event)s
+    ), uses AS (     -- one pass over the consumptions of the event
+        SELECT u.ticket_id, jsonb_object_agg(u.station, u.cnt) AS uses
+        FROM (SELECT c.ticket_id, c.station, count(*) AS cnt FROM station_consumptions c
+              WHERE c.event_id = %(event)s GROUP BY c.ticket_id, c.station) u
+        GROUP BY u.ticket_id
+    ), computed AS (
         SELECT t.event_id, t.id AS ticket_id, t.serial, t.ticket_type_id, t.status,
-               CASE WHEN t.status = 'valid' THEN (
-                   SELECT COALESCE(array_agg(x.s ORDER BY x.s), ARRAY[]::text[]) FROM (
-                       SELECT r.station AS s FROM checkin_station_rules r
-                       WHERE r.event_id = t.event_id AND r.ticket_type_id = t.ticket_type_id AND r.max_uses > 0
-                       UNION
-                       SELECT 'EVENT_ENTRY' WHERE NOT EXISTS (
-                           SELECT 1 FROM checkin_station_rules r
-                           WHERE r.event_id = t.event_id AND r.ticket_type_id = t.ticket_type_id
-                             AND r.station = 'EVENT_ENTRY')
-                   ) x)
+               CASE WHEN t.status = 'valid' THEN COALESCE(ty.stations, ARRAY['EVENT_ENTRY']::text[])
                     ELSE ARRAY[]::text[] END AS stations,
-               COALESCE((SELECT jsonb_object_agg(u.station, u.cnt) FROM (
-                            SELECT c.station, count(*) AS cnt FROM station_consumptions c
-                            WHERE c.ticket_id = t.id GROUP BY c.station) u), '{}'::jsonb) AS uses
-        FROM tickets t WHERE t.event_id = %(event)s
+               COALESCE(u.uses, '{}'::jsonb) AS uses
+        FROM tickets t
+        LEFT JOIN types ty ON ty.ticket_type_id = t.ticket_type_id
+        LEFT JOIN uses u ON u.ticket_id = t.id
+        WHERE t.event_id = %(event)s
     ), hashed AS (
         SELECT c.*, md5(concat_ws('|', c.serial, c.ticket_type_id, c.status,
                                   array_to_string(c.stations, ','), c.uses::text)) AS content_hash
