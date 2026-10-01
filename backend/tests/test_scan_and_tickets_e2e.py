@@ -99,7 +99,7 @@ def test_ticket_tdev_and_capability_window(client: TestClient, demo_store):
     now = datetime.now(timezone.utc)
     payload = cap.verify_with_ring(capability, ring, now)
     assert payload.eid == event_id
-    assert payload.nbf == int(ev.starts_at.timestamp())
+    assert payload.nbf == payload.iat  # valid from purchase (orders/service.py), not from starts_at
     assert payload.exp == int(ev.ends_at.timestamp())
     assert payload.ref == serial
 
