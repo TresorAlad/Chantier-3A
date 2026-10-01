@@ -16,10 +16,10 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 
-from checkin import repository, service
+from checkin import repository, service, sync_service
 from checkin.ports import AuthError
 from checkin.runtime import get_runtime
-from checkin.schemas import ScanRequest, ScanResponse
+from checkin.schemas import AcknowledgeRequest, ScanRequest, ScanResponse, SyncRequest
 from checkin.service import ApiError
 from http_layer.errors import json_error
 
@@ -107,6 +107,70 @@ def scan(body: ScanRequest, request: Request):
     """Online scan of one QR: verify, apply the station rule, consume atomically, journal."""
     with _session(request, event_id=body.event_id, role="scanner", terminal_id=body.terminal_id) as (rt, conn, p):
         return service.online_scan(rt, conn, p, body)
+
+
+@router.post("/sync")
+def sync(body: SyncRequest, request: Request):
+    """Batch of offline scans: one status per operation, idempotent, order-independent conflicts."""
+    with _session(request, event_id=body.event_id, role="scanner", terminal_id=body.terminal_id) as (rt, conn, p):
+        return sync_service.sync_batch(rt, conn, p, body)
+
+
+CONFLICT_TYPES = {
+    "CROSS_TERMINAL_DOUBLE_ADMISSION",
+    "SAME_TERMINAL_REPLAY",
+    "LATE_REVOKED",
+    "NOT_AUTHORIZED_SERVER_SIDE",
+    "CLOCK_SUSPECT",
+}
+
+
+@router.get("/conflicts")
+def conflicts(
+    request: Request,
+    event_id: str = Query(min_length=1, max_length=64),
+    status: str | None = Query(default=None, pattern="^(open|acknowledged)$"),
+    type: str | None = Query(default=None, max_length=40),
+    cursor: int | None = Query(default=None, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """Conflicts of an event, newest first (supervisor)."""
+    if type is not None and type not in CONFLICT_TYPES:
+        raise ApiError(400, "invalid_request", "unknown conflict type")
+    with _session(request, event_id=event_id, role="admin") as (_rt, conn, _p):
+        rows = repository.list_conflicts(
+            conn, event_id=event_id, status=status, ctype=type, cursor=cursor, limit=limit + 1
+        )
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return {
+        "conflicts": [sync_service.conflict_view(r) for r in rows],
+        "next_cursor": rows[-1]["conflict_id"] if has_more and rows else None,
+    }
+
+
+@router.post("/conflicts/{conflict_id}/acknowledge")
+def acknowledge(conflict_id: int, body: AcknowledgeRequest, request: Request):
+    """Supervisor acknowledges a conflict. Idempotent: the first resolver and note are kept."""
+    rt = get_runtime(request.app)
+    with rt.pool.connection(timeout=5) as conn:
+        principal = rt.auth.authenticate(conn, request)
+        event_id = repository.conflict_event(conn, conflict_id)
+        if event_id is None:
+            raise ApiError(404, "not_found", "conflict not found")
+        rt.auth.require_role(conn, principal, event_id, "admin")
+        row = repository.acknowledge_conflict(conn, conflict_id, principal.user_id, body.note)
+        conn.commit()
+    return {"conflict": sync_service.conflict_view(row)}
+
+
+@router.get("/stats")
+def stats(request: Request, event_id: str = Query(min_length=1, max_length=64)):
+    """Live counters per station, conflicts and terminals (no personal data)."""
+    with _session(request, event_id=event_id, role="scanner") as (rt, conn, _p):
+        raw = repository.stats(conn, event_id)
+        now = rt.clock()
+    return sync_service.stats_view(event_id, now, raw)
 
 
 @router.get("/snapshot")

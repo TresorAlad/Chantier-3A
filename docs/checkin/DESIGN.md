@@ -217,7 +217,7 @@ Pas de trigger sur les tables 3A (ce serait modifier leur comportement) : le raf
 | `station_consumptions` | `(event_id, station)` | `/stats` (compte par poste), snapshot (`uses`) |
 | `station_consumptions` | `(winning_log_id)` | lien log → consommation (audit) |
 | `scan_conflicts` | `UNIQUE(losing_log_id)` | upsert idempotent d'un conflit |
-| `scan_conflicts` | `(event_id, status, detected_at DESC)` | `GET /conflicts?status=` |
+| `scan_conflicts` | `(event_id, status, conflict_id DESC)` | `GET /conflicts?status=` (curseur sur `conflict_id`) |
 | `scan_conflicts` | `(ticket_id, station)` | mise à jour des conflits quand le gagnant change |
 | `checkin_entitlements` | `(event_id, version, ticket_id)` | snapshot delta `version > $since` + curseur |
 | `checkin_terminals` | `(event_id, last_seen_at DESC)` | `/stats` par terminal |
@@ -334,7 +334,7 @@ Réponse **partielle** `200`, un statut par `operation_id`, dans l'ordre reçu :
 ```
 Statuts : `accepted` (journalisé) · `already_processed` (rejeu : renvoie le résultat **d'origine**, rien n'est écrit) ·
 `conflict` (journalisé, mais pas gagnant ou inéligible) · `rejected` (non journalisé, code stable).
-Une opération mal formée n'invalide **jamais** le lot. Les erreurs d'infrastructure (base, verrou) renvoient `503` + `Retry-After`
+Une opération dont la décision serveur est suspecte d'horloge porte `"flags": ["clock_suspect"]`. Une opération mal formée n'invalide **jamais** le lot. Les erreurs d'infrastructure (base, verrou) renvoient `503` + `Retry-After`
 pour **tout** le lot : le rejeu est sans danger (idempotence). Un `operation_id` déjà connu avec un **contenu différent**
 (`payload_hash`) est `rejected` / `operation_id_reuse`.
 
@@ -355,11 +355,14 @@ Rôle `admin`+ (contient des identifiants d'agents). Pagination par curseur `log
 Rôle `scanner`+ (compteurs seulement, pas de données personnelles).
 ```json
 { "event_id": "01J8…E", "as_of": "2026-10-03T08:20:00Z",
-  "by_station": { "EVENT_ENTRY": { "valid": 2310, "already_scanned": 41, "not_authorized": 3, "invalid": 7 } },
+  "by_station": { "EVENT_ENTRY": { "consumed": 2310,
+                  "decisions": { "valid": 2310, "already_scanned": 41, "not_authorized": 3, "invalid": 7 } } },
   "conflicts": { "open": 2, "acknowledged": 0, "by_type": { "CROSS_TERMINAL_DOUBLE_ADMISSION": 2 } },
   "terminals": [ { "terminal_id": "7d0c…", "label": "Porte A", "last_seen_at": "2026-10-03T08:19:40Z",
-                   "clock_offset_ms": 412, "revoked": false, "last_batch_at": "2026-10-03T08:15:00Z" } ] }
+                   "last_batch_at": "2026-10-03T08:15:00Z", "clock_offset_ms": 412, "pending_count": 7, "revoked": false } ] }
 ```
+`consumed` = consommations canoniques (`station_consumptions`) ; `decisions` = nombre de journaux par `server_decision`
+(toutes tentatives, y compris les refus et les preuves d'audit).
 « File en attente par terminal » : **le serveur ne voit pas l'outbox locale**. Il fournit `last_seen_at` / `last_batch_at` ;
 l'app devrait envoyer son nombre d'opérations en attente (`pending_count`) dans l'enveloppe de `/sync` (proposition à Rodrigue).
 

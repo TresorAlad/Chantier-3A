@@ -33,11 +33,21 @@ def register_terminal(conn: psycopg.Connection, terminal_id: UUID, event_id: str
     ).fetchone()
 
 
-def touch_batch(conn: psycopg.Connection, terminal_id: UUID, offset_ms: int | None, at: datetime) -> None:
-    """Record the last batch time and raw clock offset of a terminal (diagnostic only)."""
+def touch_batch(
+    conn: psycopg.Connection,
+    terminal_id: UUID,
+    offset_ms: int | None,
+    at: datetime,
+    pending_count: int | None = None,
+) -> None:
+    """Record last batch time, raw clock offset and reported outbox size (diagnostic only)."""
     conn.execute(
-        "UPDATE checkin_terminals SET last_batch_at = %s, clock_offset_ms = %s WHERE terminal_id = %s",
-        (at, offset_ms, terminal_id),
+        """
+        UPDATE checkin_terminals
+        SET last_batch_at = %s, clock_offset_ms = %s, pending_count = COALESCE(%s, pending_count)
+        WHERE terminal_id = %s
+        """,
+        (at, offset_ms, pending_count, terminal_id),
     )
 
 
@@ -435,3 +445,89 @@ def snapshot_page(
         """,
         args,
     ).fetchall()
+
+
+# ── Conflicts and stats ─────────────────────────────────────────────────────
+
+
+def conflict_event(conn: psycopg.Connection, conflict_id: int) -> str | None:
+    """Event owning a conflict (to authorise an acknowledgement), or ``None``."""
+    row = conn.execute("SELECT event_id FROM scan_conflicts WHERE conflict_id = %s", (conflict_id,)).fetchone()
+    return row["event_id"] if row else None
+
+
+_CONFLICT_SELECT = """
+    SELECT c.conflict_id, c.type, c.station, c.ticket_id, c.clock_suspect, c.status, c.detected_at, c.note,
+           c.resolved_by, c.resolved_at, t.serial,
+           w.log_id AS w_log_id, w.terminal_id AS w_terminal, w.corrected_evaluated_at AS w_at,
+           l.log_id AS l_log_id, l.terminal_id AS l_terminal, l.corrected_evaluated_at AS l_at
+    FROM scan_conflicts c
+    JOIN scan_logs l ON l.log_id = c.losing_log_id
+    LEFT JOIN scan_logs w ON w.log_id = c.winning_log_id
+    LEFT JOIN tickets t ON t.id = c.ticket_id
+"""
+
+
+def list_conflicts(
+    conn: psycopg.Connection,
+    *,
+    event_id: str,
+    status: str | None,
+    ctype: str | None,
+    cursor: int | None,
+    limit: int,
+) -> list[dict]:
+    """Conflicts newest first, keyset-paginated on ``conflict_id``."""
+    where = ["c.event_id = %s"]
+    args: list[Any] = [event_id]
+    if status:
+        where.append("c.status = %s")
+        args.append(status)
+    if ctype:
+        where.append("c.type = %s")
+        args.append(ctype)
+    if cursor is not None:
+        where.append("c.conflict_id < %s")
+        args.append(cursor)
+    args.append(limit)
+    return conn.execute(
+        f"{_CONFLICT_SELECT} WHERE {' AND '.join(where)} ORDER BY c.conflict_id DESC LIMIT %s", args
+    ).fetchall()
+
+
+def acknowledge_conflict(conn: psycopg.Connection, conflict_id: int, user_id: str, note: str) -> dict | None:
+    """Idempotent acknowledgement: the first resolver and note are kept on repeated calls."""
+    conn.execute(
+        """
+        UPDATE scan_conflicts
+        SET note = CASE WHEN status = 'open' THEN %s ELSE note END,
+            resolved_by = COALESCE(resolved_by, %s),
+            resolved_at = COALESCE(resolved_at, now()),
+            status = 'acknowledged'
+        WHERE conflict_id = %s
+        """,
+        (note, user_id, conflict_id),
+    )
+    return conn.execute(f"{_CONFLICT_SELECT} WHERE c.conflict_id = %s", (conflict_id,)).fetchone()
+
+
+def stats(conn: psycopg.Connection, event_id: str) -> dict:
+    """Counters per station, conflicts and terminals of an event (no personal data)."""
+    decisions = conn.execute(
+        "SELECT station, server_decision, count(*) AS n FROM scan_logs WHERE event_id = %s GROUP BY 1, 2",
+        (event_id,),
+    ).fetchall()
+    consumed = conn.execute(
+        "SELECT station, count(*) AS n FROM station_consumptions WHERE event_id = %s GROUP BY 1", (event_id,)
+    ).fetchall()
+    conflicts = conn.execute(
+        "SELECT status, type, count(*) AS n FROM scan_conflicts WHERE event_id = %s GROUP BY 1, 2", (event_id,)
+    ).fetchall()
+    terminals = conn.execute(
+        """
+        SELECT terminal_id, label, last_seen_at, last_batch_at, clock_offset_ms, pending_count, revoked_at
+        FROM checkin_terminals WHERE event_id = %s ORDER BY last_seen_at DESC
+        """,
+        (event_id,),
+    ).fetchall()
+    return {"decisions": decisions, "consumed": consumed, "conflicts": conflicts, "terminals": terminals}

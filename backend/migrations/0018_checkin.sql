@@ -16,6 +16,7 @@ CREATE TABLE checkin_terminals (
     first_seen_at   timestamptz NOT NULL DEFAULT now(),
     last_seen_at    timestamptz NOT NULL DEFAULT now(),
     last_batch_at   timestamptz,
+    pending_count   integer,                       -- outbox size reported by the app (optional)
     clock_offset_ms bigint,
     revoked_at      timestamptz,
     revoked_by      text
@@ -106,7 +107,8 @@ CREATE TABLE scan_conflicts (
     resolved_by    text,
     resolved_at    timestamptz
 );
-CREATE INDEX idx_scan_conflicts_event_status ON scan_conflicts (event_id, status, detected_at DESC);
+-- GET /conflicts: newest first, cursor on conflict_id (detected_at grows with conflict_id).
+CREATE INDEX idx_scan_conflicts_event_status ON scan_conflicts (event_id, status, conflict_id DESC);
 CREATE INDEX idx_scan_conflicts_ticket_station ON scan_conflicts (ticket_id, station);
 
 -- Precomputed, versioned entitlements served by /api/checkin/snapshot.

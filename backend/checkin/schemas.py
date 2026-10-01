@@ -64,7 +64,7 @@ class SyncRequest(_Strict):
     device_sent_at: datetime
     app_version: str = Field(default="", max_length=64)
     pending_count: int | None = Field(default=None, ge=0)
-    operations: list[dict[str, Any]]
+    operations: list[Any] = Field(description="Validated one by one: a bad item never fails the batch")
 
 
 class AcknowledgeRequest(_Strict):

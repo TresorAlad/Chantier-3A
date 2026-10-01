@@ -164,3 +164,40 @@ def run_parallel(n: int, fn):
     if errors:
         raise errors[0]
     return results
+
+
+# ── Sync helpers (TDEV-55) ──────────────────────────────────────────────────
+
+
+def iso(dt: datetime) -> str:
+    """UTC timestamp as sent by the 3B app (``toUtc().toIso8601String()``)."""
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def op(ticket, *, at: datetime, station="EVENT_ENTRY", decision="valid", op_id=None, **extra) -> dict:
+    """One outbox operation. ``ticket`` may be ``None`` (terminal could not read the QR)."""
+    return {
+        "operation_id": op_id or str(uuid.uuid4()),
+        "scan_id": str(uuid.uuid4()),
+        "ticket_id": ticket["id"] if ticket else None,
+        "participant_id": None,
+        "station": station,
+        "decision": decision,
+        "evaluated_at": iso(at),
+        "previous_scan_at": None,
+        "qr_version": 1,
+        **extra,
+    }
+
+
+def sync_body(world, terminal, operations, *, sent_at: datetime, batch_id=None, **extra) -> dict:
+    """JSON body of ``POST /api/checkin/sync``."""
+    return {
+        "event_id": world.event_id,
+        "terminal_id": terminal,
+        "batch_id": batch_id or str(uuid.uuid4()),
+        "device_sent_at": iso(sent_at),
+        "app_version": "test",
+        "operations": operations,
+        **extra,
+    }

@@ -99,9 +99,14 @@ connexion). Les tests du module valident explicitement la connexion du 3A après
 **Correctif suggéré (non appliqué).** `commit()` à la sortie de `Store.transaction()` (si on est au niveau le plus
 externe) et `rollback()` sur exception ; ou `autocommit=True` avec des transactions explicites.
 
-## Message prêt à envoyer à Trésor
+## Message prêt à envoyer à Trésor (version courte, WhatsApp)
 
-> Salut Trésor, en branchant le module check-in j'ai trouvé 2 points dans le 3A (rien modifié de mon côté) :
-> 1. `migrate_postgres()` (store/migrate.py) renvoie [1..13] mais ne commit pas : avec psycopg 3.3.6 la base reste vide.
-> 2. Après un doublon sur POST /api/scan, la connexion unique du Store reste en transaction avortée (pas de rollback) : toutes les requêtes authentifiées suivantes font `InFailedSqlTransaction`. Le test existant `test_scan_admit_duplicate_and_wrong_event` le reproduit.
-> Détails et commandes dans docs/checkin/BUGS_3A.md (branche feat/checkin). Tu peux confirmer / préférer les corriger toi-même ?
+> Salut Trésor 👋 J'ai trouvé 3 problèmes dans le backend 3A (je n'ai rien modifié chez toi) :
+>
+> 1️⃣ `migrate_postgres()` (store/migrate.py) dit que les migrations 1 à 13 sont faites, mais la base reste vide. Il manque un commit. Ça marche chez toi ?
+>
+> 2️⃣ Après un doublon sur `POST /api/scan`, la connexion reste cassée : toutes les requêtes suivantes plantent (`InFailedSqlTransaction`) jusqu'au redémarrage. Le test `test_scan_admit_duplicate_and_wrong_event` le montre.
+>
+> 3️⃣ Après un paiement, les billets restent non validés côté base tant qu'une autre écriture du Store ne fait pas `commit` : une autre connexion (check-in, dashboard) ne les voit pas tout de suite. Test qui le montre : `tests/checkin/test_3a_visibility.py` (branche feat/checkin).
+>
+> Détails dans `docs/checkin/BUGS_3A.md`. Tu peux confirmer ? Tu les corriges ou je te propose un correctif ? 🙏
