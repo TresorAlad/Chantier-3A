@@ -193,11 +193,13 @@ Architecture chantier 3A : `../docs/BILLETTERIE-3A-ARCHITECTURE.md`.
 |---------|------|
 | Auth, orgs, events, orders, tickets | Disponible |
 | Paiements manual / free / stub / remote / **fedapay** (Checkout.js, XOF) | Disponible |
-| Scan porte (`POST /api/scan`) | Disponible (en ligne) |
-| Offline, bundle, sync, peers | **Retiré** |
+| Scan sectorisé (`POST /api/scan`) | Disponible (entrée, repas, goodies, after) |
+| Synchronisation mobile (`POST /api/scan/sync`) | Disponible, lots idempotents jusqu'à 500 opérations |
+| Conflits d'admission | Disponible par événement et type de contrôle |
+| Bundle de droits offline (`GET /api/events/{event_id}/scan-bundle`) | Disponible avec clés, capacités et droits explicites |
 | Payouts, pages event avancées | Stub ou 501 |
 
-Backend **en ligne uniquement** : [`docs/V1-SCOPE.md`](docs/V1-SCOPE.md).
+Le scan en ligne et la remontée différée des opérations offline sont pris en charge.
 
 **Référence frontend :** [`docs/API-FRONTEND.md`](docs/API-FRONTEND.md).
 

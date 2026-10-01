@@ -9,6 +9,7 @@ from events import service as events_svc
 from http_layer.deps import AppState, get_app_state, require_user
 from http_layer.errors import json_error
 from store import NotFoundError
+from store import admissions as admissions_repo
 
 router = APIRouter(prefix="/events", tags=["events-admin"])
 ticket_router = APIRouter(tags=["ticket-types"])
@@ -164,7 +165,7 @@ def admission_conflicts(event_id: str, state: AppState = Depends(require_user)):
     """Admission conflicts."""
     if not rbac.can_manage_event(state.store, state.current_user.id, event_id, rbac.ROLE_SCANNER):
         return json_error(403, "forbidden", "you are not a member of this event's org")
-    return {"conflicts": []}
+    return {"conflicts": admissions_repo.list_conflicts(state.store, event_id)}
 
 
 @ticket_router.patch("/ticket-types/{tt_id}")

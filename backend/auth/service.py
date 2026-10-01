@@ -113,7 +113,10 @@ def signup(st: Store, email: str, password: str, name: str) -> User:
     except NotFoundError:
         pass
     ph = hash_password(password)
-    return user_store.create_user(st, norm, ph, name.strip())
+    return user_store.create_user(
+        st,
+        user_store.UserPartial(email=norm, password_hash=ph, name=name.strip()),
+    )
 
 
 def signup_with_invite(st: Store, invite_token: str, password: str, name: str) -> tuple[User, str]:
@@ -140,7 +143,10 @@ def signup_with_invite(st: Store, invite_token: str, password: str, name: str) -
         pass
     ph = hash_password(password)
     display = name.strip() or inv.email.split("@")[0]
-    user = user_store.create_user(st, inv.email, ph, display)
+    user = user_store.create_user(
+        st,
+        user_store.UserPartial(email=inv.email, password_hash=ph, name=display),
+    )
     orgs_repo.add_org_member(st, inv.org_id, user.id, inv.role, now)
     orgs_repo.mark_invite_accepted(st, inv.id, now)
     return user, inv.org_id

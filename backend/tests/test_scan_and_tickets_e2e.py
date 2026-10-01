@@ -55,7 +55,16 @@ def _paid_ticket_flow(client: TestClient, demo_store) -> tuple[str, str, str, st
 
     tt = client.post(
         f"/api/events/{event_id}/ticket-types",
-        json={"name": "GA", "price_minor": 500, "quantity_total": 20, "max_per_order": 4},
+        json={
+            "name": "GA",
+            "price_minor": 500,
+            "quantity_total": 20,
+            "max_per_order": 4,
+            "access_event": True,
+            "access_food": True,
+            "access_merch": True,
+            "access_after": True,
+        },
         headers=h,
     )
     assert tt.status_code == 201, tt.text
@@ -99,7 +108,11 @@ def test_ticket_tdev_and_capability_window(client: TestClient, demo_store):
     now = datetime.now(timezone.utc)
     payload = cap.verify_with_ring(capability, ring, now)
     assert payload.eid == event_id
-    assert payload.nbf == int(ev.starts_at.timestamp())
+    # A ticket is usable as soon as payment settles, including registrations
+    # made after an event has started. Its issued-at and not-before timestamps
+    # therefore match and must fall inside the event window.
+    assert payload.nbf == payload.iat
+    assert int(ev.starts_at.timestamp()) <= payload.nbf <= int(now.timestamp())
     assert payload.exp == int(ev.ends_at.timestamp())
     assert payload.ref == serial
 
@@ -200,3 +213,135 @@ def test_void_ticket_rejected_at_scan(client: TestClient, demo_store):
     assert r.status_code == 200
     assert r.json()["result"] == "invalid"
     assert "revoked" in r.json()["reason"].lower() or "not valid" in r.json()["reason"].lower()
+
+
+def test_sectorized_controls_have_independent_deduplication(client: TestClient, demo_store):
+    event_id, ticket_id, capability, _serial, headers = _paid_ticket_flow(client, demo_store)
+    base = {"event_id": event_id, "capability": capability, "device_id": "terminal-a"}
+
+    entrance = client.post(
+        "/api/scan", json={**base, "control_type": "event_entry"}, headers=headers
+    )
+    meal = client.post(
+        "/api/scan", json={**base, "control_type": "food_access"}, headers=headers
+    )
+    entrance_again = client.post(
+        "/api/scan", json={**base, "control_type": "event_entry"}, headers=headers
+    )
+
+    assert entrance.json()["result"] == "admitted"
+    assert meal.json()["result"] == "admitted"
+    assert entrance_again.json()["result"] == "duplicate"
+    assert entrance_again.json()["ticket_id"] == ticket_id
+    assert entrance_again.json()["first_scan"]["device_id"] == "terminal-a"
+
+    stats = client.get(f"/api/events/{event_id}/stats", headers=headers)
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["stats"]["admitted"] == 1
+    assert stats.json()["stats"]["admitted_by_control"]["event_entry"] == 1
+    assert stats.json()["stats"]["admitted_by_control"]["food_access"] == 1
+
+
+def test_scan_bundle_exposes_signed_tickets_and_explicit_rights(client: TestClient, demo_store):
+    event_id, ticket_id, capability, _serial, headers = _paid_ticket_flow(client, demo_store)
+
+    response = client.get(f"/api/events/{event_id}/scan-bundle", headers=headers)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["event_id"] == event_id
+    assert body["issuer_keys"]["keys"]
+    ticket = next(item for item in body["tickets"] if item["ticket_id"] == ticket_id)
+    assert ticket["capability"] == capability
+    assert ticket["scan_rights"] == {
+        "event_entry": True,
+        "food_access": True,
+        "merch_pickup": True,
+        "after_entry": True,
+    }
+
+
+def test_control_without_explicit_right_is_rejected(client: TestClient, demo_store):
+    store, *_ = demo_store
+    event_id, ticket_id, capability, _serial, headers = _paid_ticket_flow(client, demo_store)
+    ticket = store.fetchone("SELECT ticket_type_id FROM tickets WHERE id = ?", (ticket_id,))
+    store.execute(
+        "UPDATE ticket_types SET access_food = FALSE WHERE id = ?",
+        (ticket["ticket_type_id"],),
+    )
+
+    response = client.post(
+        "/api/scan",
+        json={
+            "event_id": event_id,
+            "capability": capability,
+            "control_type": "food_access",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["result"] == "not_authorized"
+    admitted = store.fetchone(
+        "SELECT 1 FROM admissions WHERE ticket_id = ? AND control_type = 'food_access'",
+        (ticket_id,),
+    )
+    assert admitted is None
+
+
+def test_offline_sync_is_idempotent_and_surfaces_cross_device_conflict(
+    client: TestClient, demo_store
+):
+    event_id, ticket_id, capability, _serial, headers = _paid_ticket_flow(client, demo_store)
+    scanned_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def operation(operation_id: str, device_id: str) -> dict:
+        return {
+            "operation_id": operation_id,
+            "capability": capability,
+            "device_id": device_id,
+            "gate_id": device_id,
+            "scanned_at": scanned_at,
+            "reported_result": "admitted",
+            "control_type": "event_entry",
+        }
+
+    first_body = {"event_id": event_id, "operations": [operation("op-a", "terminal-a")]}
+    first = client.post("/api/scan/sync", json=first_body, headers=headers)
+    replay = client.post("/api/scan/sync", json=first_body, headers=headers)
+    second = client.post(
+        "/api/scan/sync",
+        json={"event_id": event_id, "operations": [operation("op-b", "terminal-b")]},
+        headers=headers,
+    )
+
+    assert first.status_code == 200, first.text
+    assert first.json()["results"][0]["result"] == "admitted"
+    assert replay.json()["results"][0]["replayed"] is True
+    assert second.json()["results"][0]["result"] == "duplicate"
+    assert second.json()["results"][0]["reported_result"] == "admitted"
+
+    conflicts = client.get(f"/api/events/{event_id}/admission-conflicts", headers=headers)
+    assert conflicts.status_code == 200
+    conflict = conflicts.json()["conflicts"][0]
+    assert conflict["ticket_id"] == ticket_id
+    assert conflict["control_type"] == "event_entry"
+    assert conflict["device_count"] == 2
+
+    tampered = capability[:-1] + ("A" if capability[-1] != "A" else "B")
+    rejected = client.post(
+        "/api/scan/sync",
+        json={
+            "event_id": event_id,
+            "operations": [
+                {**operation("op-tampered", "terminal-c"), "capability": tampered}
+            ],
+        },
+        headers=headers,
+    )
+    assert rejected.json()["results"][0]["result"] == "invalid"
+    stored = demo_store[0].fetchone(
+        "SELECT COUNT(*) AS n FROM admissions WHERE operation_id = ?",
+        ("op-tampered",),
+    )
+    assert stored["n"] == 0

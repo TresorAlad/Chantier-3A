@@ -17,6 +17,7 @@ class Status(str, Enum):
     DUPLICATE = "duplicate"
     INVALID = "invalid"
     WRONG_EVENT = "wrong_event"
+    NOT_AUTHORIZED = "not_authorized"
 
 
 @dataclass
@@ -41,13 +42,14 @@ def decide(
     if not ok:
         return terminal
     if store is not None:
-        blocked = _reject_if_ticket_not_valid(store, payload)
+        blocked = reject_if_ticket_not_valid(store, payload)
         if blocked is not None:
             return blocked
     return _admit_or_duplicate(payload, seen, now)
 
 
-def _reject_if_ticket_not_valid(st: Store, payload: cap.Payload) -> Result | None:
+def reject_if_ticket_not_valid(st: Store, payload: cap.Payload) -> Result | None:
+    """Reject a verified capability when its server-side ticket is not valid."""
     row = st.fetchone("SELECT status FROM tickets WHERE id = ?", (payload.tid,))
     if row is None:
         return Result(Status.INVALID, payload=payload, reason="ticket not issued for this event")
