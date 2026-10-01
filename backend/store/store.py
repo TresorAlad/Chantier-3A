@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 import psycopg
+from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
 
 from store.migrate import migrate_postgres
@@ -28,6 +29,7 @@ class Store:
     """Store."""
     _pg: psycopg.Connection
     _vault: object | None = None
+    _tx_depth: int = field(default=0, init=False, repr=False, compare=False)
 
     @property
     def primary(self) -> psycopg.Connection:
@@ -46,7 +48,11 @@ class Store:
     def execute_rowcount(self, query: str, args: tuple[Any, ...] = ()) -> int:
         """Execute rowcount on ``Store``."""
         q = rebind_query(query)
-        cur = self._pg.execute(q, args)
+        try:
+            cur = self._pg.execute(q, args)
+        except Exception:
+            self._pg.rollback()  # a failed statement must not leave the shared connection aborted
+            raise
         self._pg.commit()
         return cur.rowcount
 
@@ -64,9 +70,19 @@ class Store:
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
-        """Transaction on ``Store``."""
-        with self._pg.transaction():
-            yield
+        """Transaction on ``Store``: the outermost block is a real transaction, committed on exit.
+
+        ``fetchone``/``fetchall`` leave an implicit transaction open, which would turn a bare
+        ``connection.transaction()`` into a mere savepoint that nothing ever commits. Close it first.
+        """
+        if self._tx_depth == 0 and self._pg.info.transaction_status == TransactionStatus.INTRANS:
+            self._pg.commit()
+        self._tx_depth += 1
+        try:
+            with self._pg.transaction():
+                yield
+        finally:
+            self._tx_depth -= 1
 
 
 def open_postgres(database_url: str) -> Store:

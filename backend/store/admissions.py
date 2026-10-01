@@ -35,26 +35,22 @@ def try_insert_admitted(
     scanned_at: datetime,
 ) -> bool:
     """Try insert admitted."""
-    try:
-        st.execute(
-            """
-            INSERT INTO admissions (id, ticket_id, event_id, gate_id, scanned_by, device_id,
-                scanned_at, result, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', '')
-            """,
-            (
-                new_ulid(),
-                ticket_id,
-                event_id,
-                gate_id,
-                scanned_by,
-                device_id,
-                time_to_text(scanned_at),
-            ),
-        )
-        return True
-    except Exception as err:
-        msg = str(err).lower()
-        if "unique" in msg or "duplicate" in msg:
-            return False
-        raise
+    # ON CONFLICT DO NOTHING: a duplicate is not an error, so the shared connection is never aborted.
+    inserted = st.execute_rowcount(
+        """
+        INSERT INTO admissions (id, ticket_id, event_id, gate_id, scanned_by, device_id,
+            scanned_at, result, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', '')
+        ON CONFLICT DO NOTHING
+        """,
+        (
+            new_ulid(),
+            ticket_id,
+            event_id,
+            gate_id,
+            scanned_by,
+            device_id,
+            time_to_text(scanned_at),
+        ),
+    )
+    return inserted == 1

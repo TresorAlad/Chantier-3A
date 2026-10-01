@@ -12,7 +12,10 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Iterator
+
+from psycopg.pq import TransactionStatus
 
 from store.paths import MIGRATIONS_DIR
 from store.store import Store
@@ -143,6 +146,14 @@ class SqliteConn:
 
     def commit(self) -> None:
         """No-op: statements outside ``transaction()`` autocommit (``isolation_level=None``)."""
+
+    def rollback(self) -> None:
+        """No-op for the same reason: nothing is pending outside ``transaction()``."""
+
+    @property
+    def info(self) -> Any:
+        """Stand-in for ``psycopg.Connection.info``: SQLite never has an implicit transaction open."""
+        return SimpleNamespace(transaction_status=TransactionStatus.IDLE)
 
     def close(self) -> None:
         with self._lock:
