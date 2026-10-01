@@ -30,7 +30,7 @@ Retourner au projet > **New** > **Web Services**.
 | Root Directory | `backend` |
 | Dockerfile | `Dockerfile` (défaut) |
 | Name | ex. `billeterie-api` |
-| Health Check Path | `/healthz` |
+| Health Check Path | `/healthz?db=1` (ou `/healthz` en prod : la base est testée automatiquement) |
 | Instance type | Starter ou plus |
 
 **Disque persistant** (Settings ou à la création si proposé) :
@@ -56,7 +56,7 @@ CHANTIER3A_PUBLIC_SIGNUP=0
 
 Render injecte **`PORT`** ; ne pas définir `CHANTIER3A_ADDR`. Au premier deploy : migrations puis `serve` (entrypoint Docker).
 
-Tester : `https://<billeterie-api>.onrender.com/healthz`.
+Tester : `https://<billeterie-api>.onrender.com/healthz` puis `https://<billeterie-api>.onrender.com/healthz?db=1` (doit répondre `database: up`). Si `?db=1` renvoie 503, corriger `CHANTIER3A_DATABASE_URL` (Neon : même URL que dans `backend/.env` local).
 
 **Build Docker échoue (`Dockerfile: no such file or directory`)** : Render cherche le Dockerfile à la **racine du dépôt** si **Root Directory** est vide. Corriger l’un des deux :
 

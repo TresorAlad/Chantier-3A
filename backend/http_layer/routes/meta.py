@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from config import Config
@@ -14,9 +16,10 @@ api_router = APIRouter(tags=["meta"])
 
 
 @root_router.get("/healthz")
-def healthz(request: Request, db: bool = Query(False)) -> dict:
-    """Healthz. Pass ``?db=1`` to verify PostgreSQL connectivity (Render / Neon)."""
-    if not db:
+def healthz(request: Request, db: bool | None = Query(None)) -> dict:
+    """Healthz. En production, vérifie PostgreSQL par défaut (Render health check)."""
+    check_db = db if db is not None else os.getenv("CHANTIER3A_PYENV") == "production"
+    if not check_db:
         return {"status": "ok"}
     store = request.app.state.store
     try:

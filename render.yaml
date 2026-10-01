@@ -16,7 +16,7 @@ services:
     dockerContext: backend
     plan: starter
     region: frankfurt
-    healthCheckPath: /healthz
+    healthCheckPath: /healthz?db=1
     disk:
       name: chantier3a-api-data
       mountPath: /srv/data
