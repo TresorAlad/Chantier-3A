@@ -151,6 +151,12 @@ def verify(token: str, pub_raw: bytes, now: datetime) -> Payload:
         sig = base64.urlsafe_b64decode(parts[2] + "==")
     except Exception as err:
         raise ErrMalformed(f"base64: {err}") from err
+    # Reject non-canonical encodings (stray trailing bits): one ticket must have exactly one QR string.
+    if (
+        base64.urlsafe_b64encode(body).decode().rstrip("=") != parts[1]
+        or base64.urlsafe_b64encode(sig).decode().rstrip("=") != parts[2]
+    ):
+        raise ErrMalformed("non-canonical base64url segment")
     pub = Ed25519PublicKey.from_public_bytes(pub_raw)
     try:
         pub.verify(sig, body)
