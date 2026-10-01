@@ -13,6 +13,8 @@ Les valeurs **en gras « à confirmer »** sont des choix par défaut prudents p
 
 | Besoin de l'app | Endpoint | Quand |
 |---|---|---|
+| Savoir quels événements l'agent peut scanner (plus besoin de connaître `event_id`) | `GET /api/checkin/events` | après la connexion |
+| Épingler la clé qui signe le snapshot | `GET /api/checkin/signing-key` | à la configuration, puis à chaque changement de `signing_key_id` |
 | Télécharger les droits pour décider hors ligne | `GET /api/checkin/snapshot` | à l'ouverture, puis toutes les minutes en ligne (mode delta) |
 | Valider un QR **avec réseau** | `POST /api/checkin/scan` | optionnel : si l'app a du réseau au moment du scan |
 | Envoyer les scans faits **hors ligne** | `POST /api/checkin/sync` | en tâche de fond, par lots (outbox) |
@@ -137,6 +139,23 @@ Pour l'affichage d'une réponse en ligne (`/scan`), proposition : `valid`→VALI
 
 ---
 
+## 3 bis. `GET /api/checkin/events` — événements de l'agent
+
+```bash
+curl -s https://HOST/api/checkin/events -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{ "events": [ { "event_id": "01J8…E", "title": "TDEV Festival 2026", "slug": "tdev-2026",
+                "starts_at": "2026-11-21T08:00:00Z", "ends_at": "2026-11-22T23:00:00Z",
+                "timezone": "Africa/Porto-Novo", "role": "scanner" } ] }
+```
+
+Seuls les événements **publiés** des organisations où l'utilisateur a au moins le rôle `scanner` sont listés (`role` : `scanner`, `admin` ou `owner`),
+triés par date de début. Liste vide = aucun accès. Pas de paramètre `event_id` : c'est l'appel à faire juste après la connexion.
+
+---
+
 ## 4. `POST /api/checkin/scan` — scan en ligne
 
 ```bash
@@ -152,8 +171,11 @@ curl -s https://HOST/api/checkin/scan -H "Authorization: Bearer $TOKEN" -H 'Cont
 ```json
 { "status": "accepted", "server_decision": "valid", "reason": "", "ticket_id": "01J8…V",
   "serial": "TDEV-2026-0042", "station": "EVENT_ENTRY", "use_index": 0,
-  "first_scanned_at": null, "operation_id": "b1c2d3e4-…" }
+  "first_scanned_at": null, "operation_id": "b1c2d3e4-…",
+  "participant": { "holder_name": "Awa K.", "pass_type": "vip" } }
 ```
+
+`participant` (nom du porteur et type de pass, rien d'autre) sert à l'écran de l'agent ; il est `null` si le billet est inconnu ou d'un autre événement.
 
 Doublon : `server_decision: "already_scanned"`, `first_scanned_at` renseigné, `use_index: null`.
 La vérification de signature (Ed25519) utilise `tickets/capability.py` du 3A, sans réimplémentation. Le QR n'est jamais stocké.
@@ -181,19 +203,28 @@ curl -s "https://HOST/api/checkin/snapshot?event_id=01J8…E&since_version=4700"
 ```json
 { "schema_version": 1, "event_id": "01J8…E", "snapshot_version": 4812, "since_version": 4700,
   "generated_at": "2026-10-03T08:00:05Z", "has_more": false, "next_cursor": null,
+  "signing_key_id": "snap_Zk3j0vQ1aB",
   "issuer_keys": { "k_If4x36FUomFia_hUBG_SJw": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo" },
   "entitlements": [
     { "ticket_id": "01J8…V", "serial": "TDEV-2026-0042", "ticket_type_id": "01J8…T",
+      "holder_name": "Awa K.", "pass_type": "vip",
       "status": "valid", "stations": ["EVENT_ENTRY"], "uses": { "EVENT_ENTRY": 1 }, "version": 4805 } ] }
 ```
 
 - **Stockez `snapshot_version`** et renvoyez-le en `since_version` au prochain appel (delta).
-- `stations` = postes autorisés ; `[]` si le billet n'est pas `valid`. **Par défaut seul `EVENT_ENTRY` est autorisé** ; les autres postes
-  n'apparaissent que si une règle a été configurée pour le type de billet (aucun droit repas/after/merch n'est inventé).
+- `stations` = postes autorisés ; `[]` si le billet n'est pas `valid`. Les droits sont **réglés par l'organisateur sur le type de billet** :
+  `access_event` (`EVENT_ENTRY`, vrai par défaut), `access_food` (`FOOD_ACCESS`), `access_merch` (`MERCH_PICKUP`), `access_after` (`AFTER_ENTRY`),
+  faux par défaut, via `PATCH /api/ticket-types/{id}` (le corps doit contenir `name`) ; ils sont lisibles dans `scan_rights` des types de billet.
+  Une ligne de `checkin_station_rules` (réglage avancé : plusieurs usages, poste personnalisé) l'emporte sur la case du type.
 - `uses` = consommations **déjà connues du serveur** (autres terminaux compris), par poste.
 - `issuer_keys` : clés publiques Ed25519 actives de l'événement (`kid` → clé en base64url sans padding) pour vérifier les QR hors ligne.
 - `ETag` + `If-None-Match` → `304 Not Modified`. Le corps est compressé en gzip si `Accept-Encoding: gzip`.
-- Aucune donnée personnelle (nom, e-mail) dans le snapshot.
+- Données personnelles **minimales** : `holder_name` et `pass_type` seulement (jamais d'e-mail, d'école ni de QR).
+- **Signature.** Chaque page est signée en Ed25519 : l'en-tête `X-Checkin-Signature: Ed25519; kid=<kid>; sig=<base64url>` couvre **les octets exacts du corps
+  non compressé** (droits `stations` et `uses` compris). Rien à re-canoniser : vérifier la signature sur le corps tel qu'il est reçu (après gunzip), avec la clé
+  publique obtenue par `GET /api/checkin/signing-key` (`{"algorithm","kid","public_key"}`, base64url) et **épinglée** dans l'app (comparer `kid` à `signing_key_id`).
+  **Refuser et ne pas stocker** une page sans signature, ou dont la signature est invalide. Pour détecter une altération au repos, conserver aussi le corps brut
+  et l'en-tête de chaque page. Les réponses `304` portent le même en-tête. Sans clé configurée côté serveur, il n'y a pas d'en-tête et `signing-key` répond 404.
 - Le serveur recalcule les droits au plus toutes les 15 s ; une modification de règle/billet apparaît donc avec ce délai.
 
 ---
