@@ -97,6 +97,25 @@ def test_pass_tiers_meta(client: TestClient):
     assert "pass_tiers" in r.json()
 
 
+def test_scan_events_lists_only_events_available_to_staff(
+    client: TestClient, demo_store
+):
+    event_id, _ticket_id, _capability, _serial, headers = _paid_ticket_flow(
+        client, demo_store
+    )
+
+    response = client.get("/api/scan/events", headers=headers)
+
+    assert response.status_code == 200, response.text
+    event = next(item for item in response.json()["events"] if item["id"] == event_id)
+    assert event["title"] == "Scan Event"
+    assert event["status"] == "published"
+    assert event["scan_role"] == "owner"
+
+    anonymous = client.get("/api/scan/events")
+    assert anonymous.status_code == 401
+
+
 def test_ticket_tdev_and_capability_window(client: TestClient, demo_store):
     store, *_ = demo_store
     event_id, _tid, capability, serial, _h = _paid_ticket_flow(client, demo_store)

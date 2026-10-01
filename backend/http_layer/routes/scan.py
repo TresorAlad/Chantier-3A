@@ -82,6 +82,31 @@ class _DbSeenSet:
         return bool(rows)
 
 
+@router.get("/scan/events")
+def list_scan_events(state: AppState = Depends(require_user)):
+    """List published events the authenticated staff member may scan.
+
+    The mobile application uses this endpoint during startup so an operator
+    never has to know or configure an event identifier at build time.
+    """
+    memberships = state.store.fetchall(
+        """SELECT org_id, role FROM org_members
+           WHERE user_id = ?""",
+        (state.current_user.id,),
+    )
+    events = []
+    for membership in memberships:
+        role = membership["role"]
+        if not rbac.role_meets(role, rbac.ROLE_SCANNER):
+            continue
+        for event in events_svc.list_by_org(state.store, membership["org_id"]):
+            if event["status"] != "published":
+                continue
+            events.append({**event, "scan_role": role})
+    events.sort(key=lambda event: (event["starts_at"], event["id"]))
+    return {"events": events}
+
+
 def _parse_scanned_at(value: str) -> datetime:
     raw = value
     if raw.endswith("Z"):
