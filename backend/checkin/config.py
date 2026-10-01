@@ -36,6 +36,7 @@ class CheckinConfig:
     snapshot_page_max: int = 5000
     lock_timeout_ms: int = 2000
     rate_limit_per_terminal: int = 600
+    snapshot_signing_key: str = field(default="", repr=False)  # secret: Ed25519 seed, base64url
     clock: ClockThresholds = field(default_factory=ClockThresholds)
 
     @classmethod
@@ -63,6 +64,7 @@ class CheckinConfig:
             auth_cache_seconds=_int("CHECKIN_AUTH_CACHE_SECONDS", 0),
             lock_timeout_ms=_int("CHECKIN_LOCK_TIMEOUT_MS", 2000),
             rate_limit_per_terminal=_int("CHECKIN_RATE_LIMIT_PER_TERMINAL", 600),
+            snapshot_signing_key=os.environ.get("CHECKIN_SNAPSHOT_SIGNING_KEY", "").strip(),
             clock=ClockThresholds(
                 offset_max=timedelta(seconds=_int("CHECKIN_CLOCK_OFFSET_MAX_SECONDS", 300)),
                 future_tolerance=timedelta(seconds=_int("CHECKIN_CLOCK_FUTURE_TOLERANCE_SECONDS", 60)),

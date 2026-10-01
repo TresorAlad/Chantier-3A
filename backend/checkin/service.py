@@ -272,6 +272,11 @@ def online_scan(rt: Runtime, conn: psycopg.Connection, principal: Principal, req
     except psycopg.errors.LockNotAvailable as err:
         raise ApiError(503, "service_busy", "check-in is busy, retry", {"Retry-After": "1"}) from err
 
+    # Name and pass type for the agent's screen, only for a ticket of this very event.
+    participant = (
+        repository.participant(conn, ticket_id) if ticket is not None and ticket.event_id == req.event_id else None
+    )
+    conn.commit()
     return {
         "status": "accepted",
         "server_decision": decision,
@@ -282,6 +287,7 @@ def online_scan(rt: Runtime, conn: psycopg.Connection, principal: Principal, req
         "use_index": use_index,
         "first_scanned_at": first_scanned_at,
         "operation_id": str(op_id),
+        "participant": participant,
     }
 
 
@@ -297,17 +303,17 @@ class _BytesCache:
 
     def __init__(self, size: int = 64) -> None:
         self._size = size
-        self._data: OrderedDict[str, tuple[bytes, bytes]] = OrderedDict()
+        self._data: OrderedDict[str, tuple[bytes, bytes, str | None]] = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> tuple[bytes, bytes] | None:
+    def get(self, key: str) -> tuple[bytes, bytes, str | None] | None:
         with self._lock:
             value = self._data.get(key)
             if value is not None:
                 self._data.move_to_end(key)
             return value
 
-    def put(self, key: str, value: tuple[bytes, bytes]) -> None:
+    def put(self, key: str, value: tuple[bytes, bytes, str | None]) -> None:
         with self._lock:
             self._data[key] = value
             self._data.move_to_end(key)
@@ -330,8 +336,8 @@ def snapshot(
     since_version: int,
     cursor: str | None,
     limit: int | None,
-) -> tuple[str, bytes, bytes]:
-    """Return ``(etag, json_bytes, gzip_bytes)`` for one page of entitlements."""
+) -> tuple[str, bytes, bytes, str | None]:
+    """Return ``(etag, json_bytes, gzip_bytes, signature_header)`` for one page of entitlements."""
     limit = min(max(limit or rt.cfg.snapshot_page_default, 1), rt.cfg.snapshot_page_max)
     meta = repository.refresh_entitlements_if_stale(conn, event_id, rt.cfg.snapshot_ttl_seconds)
     conn.commit()
@@ -343,10 +349,11 @@ def snapshot(
         except Exception as err:
             raise ApiError(400, "invalid_request", "invalid cursor") from err
         after = (last_version, last_ticket)
-    etag = '"' + hashlib.md5(f"{event_id}|{pin}|{since_version}|{cursor or ''}|{limit}".encode()).hexdigest() + '"'
+    kid = rt.signer.kid if rt.signer else ""
+    etag = '"' + hashlib.md5(f"{event_id}|{pin}|{since_version}|{cursor or ''}|{limit}|{kid}".encode()).hexdigest() + '"'
     cached = SNAPSHOT_CACHE.get(etag)
     if cached is not None:
-        return etag, cached[0], cached[1]
+        return etag, cached[0], cached[1], cached[2]
 
     rows = repository.snapshot_page(conn, event_id, since=since_version, pin=pin, after=after, limit=limit + 1)
     has_more = len(rows) > limit
@@ -362,13 +369,16 @@ def snapshot(
         "generated_at": rt.clock().isoformat().replace("+00:00", "Z"),
         "has_more": has_more,
         "next_cursor": next_cursor,
-        "issuer_keys": {kid: _b64url(pub) for kid, pub in keys.items()},
+        "signing_key_id": rt.signer.kid if rt.signer else None,
+        "issuer_keys": {k: _b64url(pub) for k, pub in keys.items()},
         "entitlements": [
             {
                 "ticket_id": r["ticket_id"],
                 "serial": r["serial"],
                 "ticket_type_id": r["ticket_type_id"],
                 "status": r["status"],
+                "holder_name": r["holder_name"],
+                "pass_type": r["pass_type"],
                 "stations": list(r["stations"]),
                 "uses": r["uses"],
                 "version": r["version"],
@@ -378,8 +388,9 @@ def snapshot(
     }
     raw = json.dumps(body, separators=(",", ":")).encode()
     packed = gzip.compress(raw, compresslevel=5)
-    SNAPSHOT_CACHE.put(etag, (raw, packed))
-    return etag, raw, packed
+    signature = rt.signer.sign(raw) if rt.signer else None
+    SNAPSHOT_CACHE.put(etag, (raw, packed, signature))
+    return etag, raw, packed, signature
 
 
 class StatsCache:

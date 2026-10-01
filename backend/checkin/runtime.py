@@ -13,6 +13,7 @@ from psycopg_pool import ConnectionPool
 from checkin.adapters import CachedAuth, CachedKeySource, Ring3AKeySource, Sessions3AAuth
 from checkin.config import CheckinConfig
 from checkin.db import open_pool
+from checkin.signing import SnapshotSigner
 from checkin.ports import Clock, KeySource, TerminalAuth, utc_now
 
 
@@ -50,9 +51,13 @@ class Runtime:
     keys: KeySource
     clock: Clock = utc_now
     limiter: RateLimiter = field(init=False)
+    signer: SnapshotSigner | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self.limiter = RateLimiter(self.cfg.rate_limit_per_terminal)
+        # A malformed key fails at startup (ValueError); no key means unsigned snapshots (the app refuses them).
+        if self.cfg.snapshot_signing_key:
+            self.signer = SnapshotSigner.from_text(self.cfg.snapshot_signing_key)
 
     def close(self) -> None:
         """Close the pool (application shutdown)."""

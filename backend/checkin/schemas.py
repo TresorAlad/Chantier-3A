@@ -37,6 +37,9 @@ class ScanResponse(BaseModel):
     use_index: int | None = None
     first_scanned_at: datetime | None = None
     operation_id: UUID
+    participant: dict[str, str] | None = Field(
+        default=None, description="holder_name and pass_type of the ticket, for the scanner screen"
+    )
 
 
 class SyncOperation(_Strict):

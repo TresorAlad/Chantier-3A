@@ -46,9 +46,13 @@ def test_full_snapshot(client, world):
     assert r.headers["ETag"].startswith('"')
 
 
-def test_snapshot_contains_no_personal_data(client, world):
+def test_snapshot_contains_only_minimal_participant_data(client, world):
+    body = snap(client, world).json()
     text = snap(client, world).text
-    assert "@example.com" not in text and "Buyer" not in text
+    assert "@example.com" not in text  # no e-mail, school or phone: only holder_name and pass_type
+    assert all(set(e) == {"ticket_id", "serial", "ticket_type_id", "status", "holder_name", "pass_type",
+                          "stations", "uses", "version"} for e in body["entitlements"])
+    assert all(e["holder_name"] == "Buyer" and e["pass_type"] for e in body["entitlements"])
     for t in world.tickets:
         assert t["capability"] not in text
 
@@ -111,7 +115,7 @@ def test_cached_gzip_bytes_decompress_to_the_plain_body(world, checkin_rt):
     from checkin import service
 
     with checkin_rt.pool.connection() as conn:
-        _etag, raw, packed = service.snapshot(
+        _etag, raw, packed, _sig = service.snapshot(
             checkin_rt, conn, event_id=world.event_id, since_version=0, cursor=None, limit=None
         )
     assert packed[:2] == b"\x1f\x8b" and gzip.decompress(packed) == raw

@@ -103,9 +103,26 @@ def load_tickets(conn: psycopg.Connection, ticket_ids: Sequence[str]) -> dict[st
 
 
 def load_rules(conn: psycopg.Connection, event_id: str, type_ids: Sequence[str]) -> dict[str, dict[str, int]]:
-    """Explicit station rules per ticket type: ``{type_id: {station: max_uses}}``."""
+    """Effective station rules per ticket type: ``{type_id: {station: max_uses}}``.
+
+    Base: the organizer's flags on the ticket type (``access_event`` ... ``access_after``, one use each).
+    An explicit ``checkin_station_rules`` row overrides the flag of its station (and can set several uses).
+    """
     if not type_ids:
         return {}
+    flags = conn.execute(
+        "SELECT id, access_event, access_food, access_merch, access_after FROM ticket_types WHERE id = ANY(%s)",
+        (list(type_ids),),
+    ).fetchall()
+    out: dict[str, dict[str, int]] = {
+        r["id"]: {
+            "EVENT_ENTRY": int(r["access_event"]),
+            "FOOD_ACCESS": int(r["access_food"]),
+            "MERCH_PICKUP": int(r["access_merch"]),
+            "AFTER_ENTRY": int(r["access_after"]),
+        }
+        for r in flags
+    }
     rows = conn.execute(
         """
         SELECT ticket_type_id, station, max_uses
@@ -114,7 +131,6 @@ def load_rules(conn: psycopg.Connection, event_id: str, type_ids: Sequence[str])
         """,
         (event_id, list(type_ids)),
     ).fetchall()
-    out: dict[str, dict[str, int]] = {}
     for r in rows:
         out.setdefault(r["ticket_type_id"], {})[r["station"]] = r["max_uses"]
     return out
@@ -355,10 +371,14 @@ _REFRESH_SQL = """
                          SELECT r.station AS s FROM checkin_station_rules r
                          WHERE r.event_id = %(event)s AND r.ticket_type_id = tt.id AND r.max_uses > 0
                          UNION
-                         SELECT 'EVENT_ENTRY' WHERE NOT EXISTS (
+                         SELECT f.s FROM (VALUES ('EVENT_ENTRY', tt.access_event), ('FOOD_ACCESS', tt.access_food),
+                                                 ('MERCH_PICKUP', tt.access_merch), ('AFTER_ENTRY', tt.access_after))
+                                         AS f(s, ok)
+                         WHERE f.ok AND NOT EXISTS (
                              SELECT 1 FROM checkin_station_rules r
-                             WHERE r.event_id = %(event)s AND r.ticket_type_id = tt.id AND r.station = 'EVENT_ENTRY')
-                     ) x ORDER BY x.s) AS stations
+                             WHERE r.event_id = %(event)s AND r.ticket_type_id = tt.id AND r.station = f.s)
+                     ) x ORDER BY x.s) AS stations,
+               COALESCE(NULLIF(tt.pass_tier, ''), tt.name) AS pass_type
         FROM ticket_types tt WHERE tt.event_id = %(event)s
     ), uses AS (     -- one pass over the consumptions of the event
         SELECT u.ticket_id, jsonb_object_agg(u.station, u.cnt) AS uses
@@ -367,6 +387,7 @@ _REFRESH_SQL = """
         GROUP BY u.ticket_id
     ), computed AS (
         SELECT t.event_id, t.id AS ticket_id, t.serial, t.ticket_type_id, t.status,
+               COALESCE(t.holder_name, '') AS holder_name, COALESCE(ty.pass_type, '') AS pass_type,
                CASE WHEN t.status = 'valid' THEN COALESCE(ty.stations, ARRAY['EVENT_ENTRY']::text[])
                     ELSE ARRAY[]::text[] END AS stations,
                COALESCE(u.uses, '{}'::jsonb) AS uses
@@ -376,17 +397,18 @@ _REFRESH_SQL = """
         WHERE t.event_id = %(event)s
     ), hashed AS (
         SELECT c.*, md5(concat_ws('|', c.serial, c.ticket_type_id, c.status,
-                                  array_to_string(c.stations, ','), c.uses::text)) AS content_hash
+                                  array_to_string(c.stations, ','), c.uses::text, c.holder_name, c.pass_type)) AS content_hash
         FROM computed c
     )
     INSERT INTO checkin_entitlements (event_id, ticket_id, serial, ticket_type_id, status, stations, uses,
-                                      content_hash, version)
+                                      holder_name, pass_type, content_hash, version)
     SELECT h.event_id, h.ticket_id, h.serial, h.ticket_type_id, h.status, h.stations, h.uses,
-           h.content_hash, nextval('checkin_version_seq')
+           h.holder_name, h.pass_type, h.content_hash, nextval('checkin_version_seq')
     FROM hashed h
     ON CONFLICT (event_id, ticket_id) DO UPDATE
         SET serial = EXCLUDED.serial, ticket_type_id = EXCLUDED.ticket_type_id, status = EXCLUDED.status,
-            stations = EXCLUDED.stations, uses = EXCLUDED.uses, content_hash = EXCLUDED.content_hash,
+            stations = EXCLUDED.stations, uses = EXCLUDED.uses, holder_name = EXCLUDED.holder_name,
+            pass_type = EXCLUDED.pass_type, content_hash = EXCLUDED.content_hash,
             version = EXCLUDED.version
         WHERE checkin_entitlements.content_hash IS DISTINCT FROM EXCLUDED.content_hash
 """
@@ -465,7 +487,7 @@ def snapshot_page(
     args.append(limit)
     return conn.execute(
         f"""
-        SELECT ticket_id, serial, ticket_type_id, status, stations, uses, version
+        SELECT ticket_id, serial, ticket_type_id, status, stations, uses, holder_name, pass_type, version
         FROM checkin_entitlements
         WHERE event_id = %s AND version > %s AND version <= %s {cond}
         ORDER BY version, ticket_id LIMIT %s
@@ -558,3 +580,29 @@ def stats(conn: psycopg.Connection, event_id: str) -> dict:
         (event_id,),
     ).fetchall()
     return {"decisions": decisions, "consumed": consumed, "conflicts": conflicts, "terminals": terminals}
+
+
+def participant(conn: psycopg.Connection, ticket_id: str) -> dict:
+    """Minimal participant data of a ticket for the scanner screen (name and pass type only)."""
+    row = conn.execute(
+        """
+        SELECT COALESCE(t.holder_name, '') AS holder_name, COALESCE(NULLIF(tt.pass_tier, ''), tt.name) AS pass_type
+        FROM tickets t JOIN ticket_types tt ON tt.id = t.ticket_type_id WHERE t.id = %s
+        """,
+        (ticket_id,),
+    ).fetchone()
+    return {"holder_name": row["holder_name"], "pass_type": row["pass_type"]} if row else {}
+
+
+def accessible_events(conn: psycopg.Connection, user_id: str) -> list[dict]:
+    """Published events of the organisations where the user is at least ``scanner``."""
+    rows = conn.execute(
+        """
+        SELECT e.id AS event_id, e.title, e.slug, e.starts_at, e.ends_at, e.timezone, m.role
+        FROM org_members m JOIN events e ON e.org_id = m.org_id
+        WHERE m.user_id = %s AND e.status = 'published' AND m.role IN ('scanner', 'admin', 'owner')
+        ORDER BY e.starts_at, e.id
+        """,
+        (user_id,),
+    ).fetchall()
+    return rows

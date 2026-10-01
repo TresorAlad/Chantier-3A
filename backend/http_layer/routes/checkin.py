@@ -16,7 +16,7 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 
-from checkin import repository, service, sync_service
+from checkin import repository, service, signing, sync_service
 from checkin.ports import AuthError
 from checkin.runtime import get_runtime
 from checkin.schemas import AcknowledgeRequest, ScanRequest, ScanResponse, SyncRequest
@@ -164,6 +164,39 @@ def acknowledge(conflict_id: int, body: AcknowledgeRequest, request: Request):
     return {"conflict": sync_service.conflict_view(row)}
 
 
+@router.get("/events")
+def events(request: Request):
+    """Published events the signed-in agent may scan (at least ``scanner`` in the organisation)."""
+    rt = get_runtime(request.app)
+    with rt.pool.connection(timeout=5) as conn:
+        principal = rt.auth.authenticate(conn, request)
+        rows = repository.accessible_events(conn, principal.user_id)
+        conn.commit()
+    return {
+        "events": [
+            {
+                "event_id": r["event_id"],
+                "title": r["title"],
+                "slug": r["slug"],
+                "starts_at": r["starts_at"],
+                "ends_at": r["ends_at"],
+                "timezone": r["timezone"],
+                "role": r["role"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/signing-key")
+def signing_key(request: Request):
+    """Public key that verifies the snapshot signature (to pin in the app). No authentication needed."""
+    signer = get_runtime(request.app).signer
+    if signer is None:
+        raise ApiError(404, "signing_not_configured", "snapshot signing is not configured on this server")
+    return signer.describe()
+
+
 @router.get("/stats")
 def stats(request: Request, event_id: str = Query(min_length=1, max_length=64)):
     """Live counters per station, conflicts and terminals (no personal data)."""
@@ -186,10 +219,12 @@ def snapshot(
 ):
     """Versioned entitlements for the offline cache (delta with ``since_version``, ETag, gzip)."""
     with _session(request, event_id=event_id, role="scanner") as (rt, conn, _p):
-        etag, raw, packed = service.snapshot(
+        etag, raw, packed, signature = service.snapshot(
             rt, conn, event_id=event_id, since_version=since_version, cursor=cursor, limit=limit
         )
     headers = {"ETag": etag, "Cache-Control": "private, max-age=0", "Vary": "Accept-Encoding"}
+    if signature:
+        headers[signing.HEADER] = signature
     if request.headers.get("If-None-Match") == etag:
         return Response(status_code=304, headers=headers)
     if "gzip" in request.headers.get("Accept-Encoding", "").lower():
