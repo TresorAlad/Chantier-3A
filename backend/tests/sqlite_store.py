@@ -175,5 +175,8 @@ def open_sqlite_store(path: str | Path) -> Store:
     """Create a fresh SQLite database at ``path`` with all migrations applied."""
     conn = SqliteConn(path)
     for migration in sorted(Path(MIGRATIONS_DIR).glob("*.sql")):
-        conn.executescript(translate_migration(migration.read_text(encoding="utf-8")))
+        sql = migration.read_text(encoding="utf-8")
+        if sql.startswith("-- pg-only"):  # PostgreSQL-only migration (check-in module): not applicable to SQLite
+            continue
+        conn.executescript(translate_migration(sql))
     return Store(_pg=conn)  # type: ignore[arg-type]
