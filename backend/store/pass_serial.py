@@ -9,14 +9,19 @@ from tickets.pass_ref import format_pass_ref, random_pass_suffix
 _MAX_ATTEMPTS = 128
 
 
-def next_pass_ref(st: Store, conn, year: int) -> str:
-    """Allocate a unique TDEV-YYYY-NNNN inside an open order settlement transaction."""
+def next_pass_ref(st: Store, conn, year: int, taken: set[str] | None = None) -> str:
+    """Allocate a unique TDEV-YYYY-NNNN inside an open order settlement transaction.
+
+    ``taken`` holds the references already drawn for tickets not yet inserted (same order).
+    """
     del st  # kept for API compatibility with callers
     exists_q = rebind_query("SELECT 1 FROM tickets WHERE serial = ? LIMIT 1")
     for _ in range(_MAX_ATTEMPTS):
         ref = format_pass_ref(year, random_pass_suffix())
         row = conn.execute(exists_q, (ref,)).fetchone()
-        if row is None:
+        if row is None and (taken is None or ref not in taken):
+            if taken is not None:
+                taken.add(ref)
             return ref
     raise RuntimeError("could not allocate a unique pass reference")
 
