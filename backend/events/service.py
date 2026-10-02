@@ -9,6 +9,7 @@ from config import Config, HostScope
 from money import currency as money
 from store import NotFoundError, Store
 from store import event_keys as event_keys_repo
+from store import admissions as admissions_repo
 from store import events_repo, orgs, ticket_types as tt_repo
 from store.events_repo import EventRow
 from store.store import new_ulid
@@ -346,7 +347,13 @@ def stats(st: Store, event_id: str) -> dict:
                 "revenue_minor": r.revenue_minor,
             }
         )
-    return {"sold": sold, "revenue_minor": revenue, "admitted": admitted, "by_type": by_type}
+    return {
+        "sold": sold,
+        "revenue_minor": revenue,
+        "admitted": admitted,
+        "admitted_by_control": admissions_repo.admitted_counts_by_control(st, event_id),
+        "by_type": by_type,
+    }
 
 
 def list_ticket_types(st: Store, event_id: str) -> list[dict]:

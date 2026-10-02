@@ -522,9 +522,21 @@ Reponse : `text/plain` (placeholder PDF).
 
 ---
 
-## Scan porte (en ligne uniquement)
+## Scan et synchronisation terrain
 
-Chaque scan appelle le backend (pas de bundle offline ni de sync différée). Voir [`V1-SCOPE.md`](V1-SCOPE.md).
+### GET `/api/events/{event_id}/scan-bundle`
+
+Requiert le rôle scanner. Retourne le snapshot nécessaire au fonctionnement hors
+ligne : clés publiques Ed25519, capacités signées, données participant minimales,
+statut du billet et droits explicites par contrôle.
+
+Les droits sont configurés sur le type de billet avec `access_event`,
+`access_food`, `access_merch` et `access_after`. Par défaut, seule l'entrée
+principale est autorisée.
+
+Le scan peut être validé en ligne avec `POST /api/scan` ou remonté depuis
+l'outbox mobile avec `POST /api/scan/sync`. Les opérations synchronisées sont
+idempotentes et les conflits entre terminaux restent auditables.
 
 ### POST `/api/scan`
 
@@ -538,11 +550,43 @@ Corps :
   "capability": "...",
   "device_id": "",
   "gate_id": "",
-  "scanned_at": "RFC3339 optionnel"
+  "scanned_at": "RFC3339 optionnel",
+  "control_type": "event_entry | food_access | merch_pickup | after_entry"
 }
 ```
 
-Reponse : `{ "result", "reason", "ticket_id" }` avec `result` dans `admitted`, `duplicate`, `invalid`, `wrong_event` (QR pour un autre evenement que `event_id` du corps).
+Reponse : `{ "result", "reason", "ticket_id", "participant", "first_scan", "control_type" }`.
+`participant` contient le nom, le pass et les options utiles au contrôle.
+Pour un doublon, `first_scan` contient l'heure, l'agent, le terminal et la porte du premier passage.
+
+### POST `/api/scan/sync`
+
+Auth : scanner+.
+
+Corps :
+
+```json
+{
+  "event_id": "...",
+  "operations": [
+    {
+      "operation_id": "UUID stable",
+      "capability": "contenu QR signé",
+      "device_id": "terminal-1",
+      "gate_id": "porte-a",
+      "scanned_at": "2026-10-01T12:00:00Z",
+      "reported_result": "admitted",
+      "control_type": "event_entry"
+    }
+  ]
+}
+```
+
+Maximum 500 opérations par lot. Rejouer le même `operation_id` ne crée aucune
+ligne supplémentaire et renvoie `replayed: true`. Une signature invalide est
+refusée et n'est pas enregistrée. Quand deux terminaux ont tous deux admis le
+même droit hors ligne, le premier reste `admitted`, le second converge vers
+`duplicate`, et son `reported_result: admitted` conserve la preuve du conflit.
 
 ### GET `/api/events/{event_id}/attendees`
 

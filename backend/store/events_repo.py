@@ -360,9 +360,11 @@ def ticket_type_stats_for_event(st: Store, event_id: str) -> list[TicketTypeStat
 
 
 def count_admitted_for_event(st: Store, event_id: str) -> int:
-    """Count admitted for event."""
+    """Count authoritative main-entrance admissions for an event."""
     row = st.fetchone(
-        "SELECT COUNT(*) AS n FROM admissions WHERE event_id = ?",
+        """SELECT COUNT(*) AS n FROM admissions
+           WHERE event_id = ? AND result = 'admitted'
+             AND control_type = 'event_entry'""",
         (event_id,),
     )
     if row is None:
