@@ -16,7 +16,11 @@ Cas fréquent :
 
 Controle : logs Render au demarrage, ligne `billetterie-api: PostgreSQL cible=.../neondb`. Le **host** doit rester le meme a chaque deploy (ex. `…neon.tech`). Si le host change, les donnees sont sur une autre base.
 
-Une seule base de verite : **Neon** pour prod TDEV, avec `KEY_PASSPHRASE` identique au seed local.
+API : `GET /healthz?db=1` renvoie aussi `database_target` (host/nom de base, sans mot de passe).
+
+**Protection au demarrage** : sur le disque persistant `/srv/data`, l API enregistre la cible PostgreSQL au premier deploy. Si `CHANTIER3A_DATABASE_URL` change ensuite, le service **refuse de demarrer** (au lieu d afficher une billetterie vide). Correctif : remettre l URL Neon d origine. Changement volontaire : une fois `CHANTIER3A_ALLOW_DATABASE_URL_CHANGE=1`, ou supprimer `/srv/data/.chantier3a_db_identity`.
+
+Une seule base de verite : **Neon** pour prod TDEV, avec `KEY_PASSPHRASE` identique au seed local. **Ne pas** activer `CHANTIER3A_DEMO=1` en production.
 
 ---
 

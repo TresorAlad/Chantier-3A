@@ -28,7 +28,13 @@ def healthz(request: Request, db: bool | None = Query(None)) -> dict:
             raise RuntimeError("unexpected health query result")
     except Exception:
         return json_error(503, "database_unavailable", "PostgreSQL unreachable or misconfigured")
-    return {"status": "ok", "database": "up"}
+    cfg: Config = request.app.state.config
+    out: dict = {"status": "ok", "database": "up"}
+    if check_db and getattr(cfg, "database_url", ""):
+        from store.db_identity import database_target_label
+
+        out["database_target"] = database_target_label(cfg.database_url)
+    return out
 
 
 @api_router.get("/public/site-config")

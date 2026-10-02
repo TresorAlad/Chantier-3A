@@ -257,6 +257,8 @@ export interface OrderRegistration {
     school_name?: string;
     motivation?: string;
     wish?: string;
+    /** Réponses complètes au formulaire participant (vide pour les anciennes commandes). */
+    form?: Record<string, unknown>;
 }
 
 export interface Order {

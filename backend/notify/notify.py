@@ -10,7 +10,14 @@ from email.message import EmailMessage
 
 from config import Config
 from events.festival_schedule import format_event_when_label
-from notify.ticket_email import TicketEmailContext, TicketEmailLine, build_ticket_email
+from notify.ticket_email import (
+    DEFAULT_GOODIES_SHOP_URL,
+    TicketEmailContext,
+    TicketEmailLine,
+    TicketEmailVariant,
+    build_ticket_email,
+)
+from events.passes import PASS_TIER_VIP
 from notify.ticket_image import TicketImageInput, render_pass_ticket_pdf
 from store import events_repo, orders as orders_repo
 from store.store import Store
@@ -22,6 +29,30 @@ def _venue_line(venue: str, address: str) -> str:
     parts = [venue.strip(), address.strip()]
     joined = ", ".join(p for p in parts if p)
     return joined or "Lieu à confirmer"
+
+
+def _email_variant_for_order(store: Store, ticket_rows) -> TicketEmailVariant:
+    """Nexus Night utilise le template dédié ; le pass festival gratuit ou standard utilise l'autre."""
+    for ticket in ticket_rows:
+        row = store.fetchone(
+            "SELECT pass_tier, name FROM ticket_types WHERE id = ?",
+            (ticket.ticket_type_id,),
+        )
+        tier = ""
+        name = ""
+        if row is not None:
+            if hasattr(row, "keys"):
+                tier = str(row["pass_tier"] or "")
+                name = str(row["name"] or "")
+            else:
+                tier = str(row[0] or "")
+                name = str(row[1] or "") if len(row) > 1 else ""
+        if tier == PASS_TIER_VIP:
+            return "nexus"
+        label = name.lower()
+        if "nexus" in label or "vip" in label:
+            return "nexus"
+    return "festival"
 
 
 class NotifyService:
@@ -109,6 +140,8 @@ class NotifyService:
             pdf_attachments.append((f"billet-{t.serial}.pdf", pdf))
 
         contact_url = f"{base}/contact" if base else None
+        shop_url = (self._config.goodies_shop_url or "").strip() or DEFAULT_GOODIES_SHOP_URL
+        variant = _email_variant_for_order(self._store, ticket_rows)
         subject, plain, html = build_ticket_email(
             TicketEmailContext(
                 buyer_name=ord_row.buyer_name,
@@ -118,6 +151,8 @@ class NotifyService:
                 billet_url=billet_url,
                 tickets=tuple(mail_lines),
                 contact_url=contact_url,
+                variant=variant,
+                goodies_shop_url=shop_url,
             )
         )
 

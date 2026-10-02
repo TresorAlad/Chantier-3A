@@ -1,20 +1,25 @@
 import { orders as ordersApi } from '@/lib/api';
 
-/** Récupère le billet invité puis déclenche le téléchargement PDF. */
+/**
+ * Récupère les billets invités puis déclenche un téléchargement PDF par billet.
+ * Le pass Nexus donne aussi accès au festival : la commande contient alors deux billets.
+ */
 export async function downloadGuestTicketPdfForOrder(orderId: string, email: string): Promise<void> {
     const data = await ordersApi.getGuest(orderId, email.trim());
-    const ticket = data.tickets?.[0];
-    if (!ticket?.id || !ticket.serial) {
+    const tickets = (data.tickets ?? []).filter((ticket) => ticket?.id && ticket.serial);
+    if (tickets.length === 0) {
         throw new Error(
             'Votre billet n\'est pas encore disponible. Réessayez dans un instant ou consultez vos e-mails.',
         );
     }
-    await downloadGuestTicketPdf({
-        orderId,
-        email: email.trim(),
-        ticketId: ticket.id,
-        serial: ticket.serial,
-    });
+    for (const ticket of tickets) {
+        await downloadGuestTicketPdf({
+            orderId,
+            email: email.trim(),
+            ticketId: ticket.id,
+            serial: ticket.serial,
+        });
+    }
 }
 
 export async function downloadGuestTicketPdf(params: {

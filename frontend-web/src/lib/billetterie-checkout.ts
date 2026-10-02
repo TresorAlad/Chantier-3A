@@ -1,62 +1,30 @@
 import { orders as ordersApi, payments as paymentsApi } from '@/lib/api';
 import { payWithFedapay } from '@/lib/fedapay-checkout';
 import type { TicketType } from '@/lib/api-types';
-
-export interface RegistrationInput {
-    first_name: string;
-    last_name: string;
-    email: string;
-    motivation: string;
-    wish: string;
-    school_name?: string;
-}
+import {
+    toRegistrationFormPayload,
+    labelsForChoices,
+    PARTICIPATION_REASON_OPTIONS,
+    type RegistrationFormValues,
+} from '@/lib/registration-form';
 
 export type CheckoutOutcome =
     | { kind: 'free_confirmed'; orderId: string; email: string }
     | { kind: 'paid'; orderId: string; email: string }
     | { kind: 'paid_pending'; orderId: string; email: string; redirectUrl?: string };
 
-const emailOk = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-
-function validateRegistrationFields(
-    input: RegistrationInput,
-): Partial<Record<keyof RegistrationInput, string>> {
-    const errors: Partial<Record<keyof RegistrationInput, string>> = {};
-    if (!input.first_name.trim()) errors.first_name = 'Indiquez votre prénom.';
-    if (!input.last_name.trim()) errors.last_name = 'Indiquez votre nom.';
-    if (!input.email.trim()) errors.email = 'Indiquez votre e-mail.';
-    else if (!emailOk(input.email)) errors.email = 'Adresse e-mail invalide.';
-    if (!input.motivation.trim()) errors.motivation = 'Ce champ est requis.';
-    if (!input.wish.trim()) errors.wish = 'Ce champ est requis.';
-    return errors;
-}
-
-export function validateRegistration(
-    input: RegistrationInput,
-    _ticketType: TicketType,
-): Partial<Record<keyof RegistrationInput, string>> {
-    return validateRegistrationFields(input);
-}
-
-/** Validation côté formulaire avant appel API (catalogue statique). */
-export function validateRegistrationForCheckoutTier(
-    input: RegistrationInput,
-    _tier: 'student' | 'vip',
-): Partial<Record<keyof RegistrationInput, string>> {
-    return validateRegistrationFields(input);
-}
-
 export async function completeCheckout(params: {
     eventId: string;
     ticketType: TicketType;
-    registration: RegistrationInput;
+    registration: RegistrationFormValues;
     /** Appelé juste avant l'ouverture du widget : l'appelant doit fermer ses modales (voir fedapay-checkout.ts). */
     onPaymentStart?: () => void;
 }): Promise<CheckoutOutcome> {
     const { eventId, ticketType, registration, onPaymentStart } = params;
-    const first = registration.first_name.trim();
-    const last = registration.last_name.trim();
-    const email = registration.email.trim();
+    const form = toRegistrationFormPayload(registration);
+    const first = form.first_name;
+    const last = form.last_name;
+    const email = form.email;
     const name = `${first} ${last}`.trim();
 
     const result = await ordersApi.create({
@@ -67,9 +35,10 @@ export async function completeCheckout(params: {
             first_name: first,
             last_name: last,
             name,
-            motivation: registration.motivation.trim(),
-            wish: registration.wish.trim(),
-            school_name: registration.school_name?.trim() ?? '',
+            motivation: labelsForChoices(PARTICIPATION_REASON_OPTIONS, form.participation_reasons).join(', '),
+            wish: form.expectations,
+            school_name: form.school_program,
+            form,
         },
     });
 

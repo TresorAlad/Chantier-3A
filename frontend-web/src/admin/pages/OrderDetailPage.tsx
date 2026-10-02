@@ -95,7 +95,12 @@ export const OrderDetailPage: React.FC = () => {
 
             <div>
               <span className="text-slate-400 block mb-0.5">École / Université</span>
-              <span className="font-medium text-slate-700">{order.school_name || 'Non spécifié'}</span>
+              <span className="font-medium text-slate-700">
+                {order.registration?.school_name ||
+                  order.school_name ||
+                  String(order.registration?.form?.school_program ?? '') ||
+                  'Non spécifié'}
+              </span>
             </div>
           </div>
 
@@ -147,12 +152,25 @@ export const OrderDetailPage: React.FC = () => {
             </div>
 
             {/* Motivation from order */}
-            {order.motivation && (
+            {(order.registration?.motivation || order.motivation) && (
               <div className="mt-4 pt-4 border-t border-slate-100 text-xs">
                 <span className="font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Motivation de l’acheteur
+                  Motivation de l&apos;acheteur
                 </span>
-                <p className="text-slate-700 italic">« {order.motivation} »</p>
+                <p className="text-slate-700 italic">
+                  « {order.registration?.motivation || order.motivation} »
+                </p>
+              </div>
+            )}
+            {(order.registration?.form && Object.keys(order.registration.form).length > 0) && (
+              <div className="mt-4 pt-4 border-t border-slate-100 text-xs">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/participants/${order.id}`)}
+                  className="text-violet-600 font-semibold hover:underline"
+                >
+                  Voir le formulaire d&apos;inscription complet
+                </button>
               </div>
             )}
           </div>

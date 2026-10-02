@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2, Calendar, MapPin, Moon, Sun, Check, Gift } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/components/theme-provider';
@@ -13,15 +13,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RegistrationWizard } from '@/components/registration/RegistrationWizard';
 import { resolveLiveCheckoutProduct } from '@/lib/billetterie-storefront';
-import {
-    completeCheckout,
-    validateRegistrationForCheckoutTier,
-    type RegistrationInput,
-} from '@/lib/billetterie-checkout';
+import { completeCheckout } from '@/lib/billetterie-checkout';
+import { clearRegistrationDraft, type RegistrationFormValues } from '@/lib/registration-form';
 import {
     billetterieCardClass,
     billetterieCtaClass,
@@ -43,23 +38,14 @@ const isSafeRedirect = (url: string) => {
     }
 };
 
-const emptyForm = (): RegistrationInput => ({
-    first_name: '',
-    last_name: '',
-    email: '',
-    motivation: '',
-    wish: '',
-    school_name: '',
-});
-
 export default function App() {
     const products = useMemo(() => getStaticBilletterieListing(), []);
     const { theme, setTheme } = useTheme();
 
     const [registerOpen, setRegisterOpen] = useState(false);
     const [activeListing, setActiveListing] = useState<BilletterieListingProduct | null>(null);
-    const [form, setForm] = useState(emptyForm);
-    const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof RegistrationInput, string>>>({});
+    /** Remonte le wizard à chaque ouverture pour repartir du brouillon de session. */
+    const [wizardKey, setWizardKey] = useState(0);
     const [submitting, setSubmitting] = useState(false);
 
     const [successOpen, setSuccessOpen] = useState(false);
@@ -84,8 +70,7 @@ export default function App() {
         if (!listing.checkoutTier) return;
 
         setActiveListing(listing);
-        setForm(emptyForm());
-        setFieldErrors({});
+        setWizardKey((prev) => prev + 1);
         setRegisterOpen(true);
     };
 
@@ -94,6 +79,7 @@ export default function App() {
         body: string,
         ticketDownload?: { orderId: string; email: string } | null,
     ) => {
+        clearRegistrationDraft();
         setSuccessTitle(title);
         setSuccessBody(body);
         setSuccessTicket(ticketDownload ?? null);
@@ -125,13 +111,8 @@ export default function App() {
         setFailureOpen(true);
     };
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (values: RegistrationFormValues) => {
         if (!activeListing?.checkoutTier) return;
-
-        const nextErrors = validateRegistrationForCheckoutTier(form, activeListing.checkoutTier);
-        setFieldErrors(nextErrors);
-        if (Object.keys(nextErrors).length > 0) return;
 
         const passTitle = activeListing.title;
         setSubmitting(true);
@@ -140,7 +121,7 @@ export default function App() {
             const outcome = await completeCheckout({
                 eventId: live.event.id,
                 ticketType: live.product.ticketType,
-                registration: form,
+                registration: values,
                 onPaymentStart: () => setRegisterOpen(false),
             });
             setRegisterOpen(false);
@@ -351,90 +332,22 @@ export default function App() {
             </main>
 
             <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-                <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{activeListing?.title ?? 'Inscription'}</DialogTitle>
                         <DialogDescription>
                             {activeListing?.isFree
                                 ? 'Complétez le formulaire pour recevoir votre pass par e-mail.'
-                                : 'Après paiement, votre billet vous sera envoyé par e-mail.'}
+                                : 'Complétez le formulaire, puis réglez votre pass. Vous recevrez le Pass Nexus Night et le Pass Festival par e-mail.'}
                         </DialogDescription>
                     </DialogHeader>
-                    <form className="space-y-4 py-2" onSubmit={handleSubmit}>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="firstName">Prénom</Label>
-                                <Input
-                                    id="firstName"
-                                    value={form.first_name}
-                                    onChange={(ev) => setForm({ ...form, first_name: ev.target.value })}
-                                    required
-                                />
-                                {fieldErrors.first_name && (
-                                    <p className="text-xs text-destructive">{fieldErrors.first_name}</p>
-                                )}
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="lastName">Nom</Label>
-                                <Input
-                                    id="lastName"
-                                    value={form.last_name}
-                                    onChange={(ev) => setForm({ ...form, last_name: ev.target.value })}
-                                    required
-                                />
-                                {fieldErrors.last_name && (
-                                    <p className="text-xs text-destructive">{fieldErrors.last_name}</p>
-                                )}
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="email">E-mail</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                value={form.email}
-                                onChange={(ev) => setForm({ ...form, email: ev.target.value })}
-                                required
-                            />
-                            {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="why">Pourquoi voulez-vous participer ?</Label>
-                            <Textarea
-                                id="why"
-                                value={form.motivation}
-                                onChange={(ev) => setForm({ ...form, motivation: ev.target.value })}
-                                required
-                            />
-                            {fieldErrors.motivation && (
-                                <p className="text-xs text-destructive">{fieldErrors.motivation}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="expectations">Qu&apos;attendez-vous de l&apos;événement ?</Label>
-                            <Textarea
-                                id="expectations"
-                                value={form.wish}
-                                onChange={(ev) => setForm({ ...form, wish: ev.target.value })}
-                                required
-                            />
-                            {fieldErrors.wish && <p className="text-xs text-destructive">{fieldErrors.wish}</p>}
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" className="w-full" disabled={submitting}>
-                                {submitting ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Envoi en cours…
-                                    </>
-                                ) : activeListing?.isFree ? (
-                                    'Valider l\'inscription'
-                                ) : (
-                                    'Continuer vers le paiement'
-                                )}
-                            </Button>
-                        </DialogFooter>
-                    </form>
+                    <RegistrationWizard
+                        key={wizardKey}
+                        passTitle={activeListing?.title ?? 'pass'}
+                        isFree={activeListing?.isFree ?? true}
+                        submitting={submitting}
+                        onSubmit={(values) => void handleSubmit(values)}
+                    />
                 </DialogContent>
             </Dialog>
 
@@ -460,7 +373,9 @@ export default function App() {
                                         Téléchargement…
                                     </>
                                 ) : (
-                                    'Télécharger mon billet'
+                                    activeListing?.checkoutTier === 'vip'
+                                        ? 'Télécharger mes billets'
+                                        : 'Télécharger mon billet'
                                 )}
                             </Button>
                         ) : null}

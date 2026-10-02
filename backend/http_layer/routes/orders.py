@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from auth import rbac
 from http_layer.deps import AppState, get_app_state, require_user
 from http_layer.errors import json_error
+from orders import registration as reg
 from orders.service import CreateOrderInput, OrderItemInput, OrdersError
 from payments import types as pt
 from payments.manual import ManualProvider
@@ -32,7 +33,7 @@ class OrderItemBody(BaseModel):
 
 
 class BuyerBody(BaseModel):
-    """Guest checkout and pass registration (required for student pass)."""
+    """Guest checkout and official participant form (PDF V1)."""
     email: str
     first_name: str = ""
     last_name: str = ""
@@ -40,6 +41,7 @@ class BuyerBody(BaseModel):
     school_name: str = ""
     motivation: str = ""
     wish: str = ""
+    form: dict = Field(default_factory=dict)
 
 
 class CreateOrderBody(BaseModel):
@@ -52,6 +54,11 @@ class CreateOrderBody(BaseModel):
 
 def _registration_json(o) -> dict:
     """Internal: pass registration fields for admin review."""
+    form = getattr(o, "registration_form", None)
+    if isinstance(form, str):
+        form = reg.parse_form(form)
+    elif not isinstance(form, dict):
+        form = {}
     return {
         "first_name": getattr(o, "buyer_first_name", "") or "",
         "last_name": getattr(o, "buyer_last_name", "") or "",
@@ -59,6 +66,7 @@ def _registration_json(o) -> dict:
         "school_name": getattr(o, "school_name", "") or "",
         "motivation": getattr(o, "motivation", "") or "",
         "wish": getattr(o, "wish", "") or "",
+        "form": form,
     }
 
 
@@ -178,6 +186,7 @@ def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)
         school_name=body.buyer.school_name,
         motivation=body.buyer.motivation,
         wish=body.buyer.wish,
+        registration_form=body.buyer.form,
         items=[OrderItemInput(t.ticket_type_id, t.quantity) for t in body.items],
         provider=body.provider,
     )
@@ -196,9 +205,12 @@ def create_order(body: CreateOrderBody, state: AppState = Depends(get_app_state)
                 "duplicate_registration",
                 "Cette adresse e-mail est déjà inscrite pour cet événement.",
             )
-        return json_error(400, "invalid_request", str(err))
+        message = str(err)
+        if message.startswith("orders:"):
+            message = "Inscription impossible. Vérifiez vos informations et réessayez."
+        return json_error(400, "invalid_request", message)
     except Exception:
-        return json_error(500, "internal_error", "internal error")
+        return json_error(500, "internal_error", "Service billetterie temporairement indisponible.")
     return {
         "order": _order_json(order),
         "payment": {

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from events import issue as issue_mod
+from events.passes import PASS_TIER_STUDENT, PASS_TIER_VIP
 from orders import registration as reg
 from payments import types as pt
 from payments.registry import Registry
@@ -67,6 +68,7 @@ class CreateOrderInput:
     school_name: str = ""
     motivation: str = ""
     wish: str = ""
+    registration_form: dict | None = None
     items: list[OrderItemInput] | None = None
     provider: str = ""
     callback_url: str = ""
@@ -95,6 +97,7 @@ class OrderView:
     created_at: datetime
     paid_at: datetime | None = None
     items: list[dict] | None = None
+    registration_form: dict | None = None
 
 
 @dataclass
@@ -146,10 +149,11 @@ class OrdersService:
                 school_name=inp.school_name,
                 motivation=inp.motivation,
                 wish=inp.wish,
+                form=inp.registration_form,
                 required=needs_reg,
             )
         except reg.RegistrationError as err:
-            raise ErrRegistrationIncomplete from err
+            raise OrdersError(str(err)) from err
         if orders_repo.has_active_order_for_event_email(
             self._store, inp.event_id, registration.email
         ):
@@ -193,6 +197,7 @@ class OrdersService:
             school_name=registration.school_name,
             motivation=registration.motivation,
             wish=registration.wish,
+            registration_form=reg.dump_form(registration.form),
             status="pending",
             subtotal_minor=subtotal,
             fee_minor=0,
@@ -299,40 +304,58 @@ class OrdersService:
         def mint(conn) -> list[tickets_repo.Ticket]:
             out: list[tickets_repo.Ticket] = []
             drawn: set[str] = set()
+
+            def mint_one(ticket_type_id: str) -> tickets_repo.Ticket:
+                ref = pass_serial.next_pass_ref(self._store, conn, ref_year, drawn)
+                tid = new_ulid()
+                payload = cap.Payload(
+                    tid=tid,
+                    ref=ref,
+                    eid=ord_row.event_id,
+                    tt=ticket_type_id,
+                    sub=ord_row.user_id or "",
+                    name=ord_row.buyer_name,
+                    iat=int(paid_at.timestamp()),
+                    nbf=nbf,
+                    exp=exp,
+                )
+                token, _ = issue_mod.issue_ticket(self._store, ord_row.event_id, payload)
+                return tickets_repo.Ticket(
+                    id=tid,
+                    order_id=ord_row.id,
+                    event_id=ord_row.event_id,
+                    ticket_type_id=ticket_type_id,
+                    holder_user_id=ord_row.user_id,
+                    holder_name=ord_row.buyer_name,
+                    serial=ref,
+                    capability=token,
+                    status="valid",
+                    issued_at=paid_at,
+                )
+
+            minted_types: set[str] = set()
+            includes_vip = False
             for item in items:
                 tt = tt_repo.get_ticket_type_by_id(self._store, item.ticket_type_id)
                 kind = tt.product_kind or tt_repo.PRODUCT_KIND_TICKET
                 if kind != tt_repo.PRODUCT_KIND_TICKET:
                     continue
+                if tt.pass_tier == PASS_TIER_VIP:
+                    includes_vip = True
                 for _ in range(item.quantity):
-                    ref = pass_serial.next_pass_ref(self._store, conn, ref_year, drawn)
-                    tid = new_ulid()
-                    payload = cap.Payload(
-                        tid=tid,
-                        ref=ref,
-                        eid=ord_row.event_id,
-                        tt=item.ticket_type_id,
-                        sub=ord_row.user_id or "",
-                        name=ord_row.buyer_name,
-                        iat=int(paid_at.timestamp()),
-                        nbf=nbf,
-                        exp=exp,
-                    )
-                    token, _ = issue_mod.issue_ticket(self._store, ord_row.event_id, payload)
-                    out.append(
-                        tickets_repo.Ticket(
-                            id=tid,
-                            order_id=ord_row.id,
-                            event_id=ord_row.event_id,
-                            ticket_type_id=item.ticket_type_id,
-                            holder_user_id=ord_row.user_id,
-                            holder_name=ord_row.buyer_name,
-                            serial=ref,
-                            capability=token,
-                            status="valid",
-                            issued_at=paid_at,
-                        )
-                    )
+                    out.append(mint_one(item.ticket_type_id))
+                    minted_types.add(item.ticket_type_id)
+            if includes_vip:
+                student_tt = next(
+                    (
+                        t
+                        for t in tt_repo.list_ticket_types_for_event(self._store, ord_row.event_id)
+                        if t.pass_tier == PASS_TIER_STUDENT and t.status == "active"
+                    ),
+                    None,
+                )
+                if student_tt is not None and student_tt.id not in minted_types:
+                    out.append(mint_one(student_tt.id))
             return out
 
         settled = orders_repo.settle_order(self._store, ord_row.id, paid_at, mint=mint)
@@ -390,6 +413,7 @@ class OrdersService:
             school_name=o.school_name,
             motivation=o.motivation,
             wish=o.wish,
+            registration_form=reg.parse_form(getattr(o, "registration_form", None)),
             status=o.status,
             subtotal_minor=o.subtotal_minor,
             fee_minor=o.fee_minor,

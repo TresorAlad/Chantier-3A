@@ -24,12 +24,40 @@ def sample_context() -> TicketEmailContext:
         billet_url="https://festival.ourtdev.com/api/orders/01EXAMPLE/guest/ticket.pdf?email=awa.mensah%40example.com",
         tickets=(
             TicketEmailLine(
-                pass_label="Pass Standard",
+                pass_label="Pass Festival",
                 holder_name="Awa Mensah",
                 serial="TDEV-2026-0042",
             ),
         ),
         contact_url="https://festival.ourtdev.com/contact",
+        variant="festival",
+        goodies_shop_url="https://shop.tdevfestival.com",
+    )
+
+
+def sample_nexus_context() -> TicketEmailContext:
+    """Commande Nexus avec Pass Festival inclus."""
+    return TicketEmailContext(
+        buyer_name="Kofi Mensah",
+        event_title="Tdev Festival 2026",
+        when_label="21-22 nov. 2026",
+        venue_line="Lomé Convention Center, Lomé, Togo",
+        billet_url="https://festival.ourtdev.com/api/orders/01NEXUS/guest/ticket.pdf?email=kofi.mensah%40example.com",
+        tickets=(
+            TicketEmailLine(
+                pass_label="Pass Nexus Night",
+                holder_name="Kofi Mensah",
+                serial="NX-2026-0007",
+            ),
+            TicketEmailLine(
+                pass_label="Pass Festival",
+                holder_name="Kofi Mensah",
+                serial="FF-2026-0007",
+            ),
+        ),
+        contact_url="https://festival.ourtdev.com/contact",
+        variant="nexus",
+        goodies_shop_url="https://shop.tdevfestival.com",
     )
 
 
@@ -190,10 +218,21 @@ def write_ticket_samples() -> tuple[Path, Path]:
     return png_path, pdf_path
 
 
+def write_nexus_preview() -> Path:
+    """Aperçu HTML du template Pass Nexus Night."""
+    _, _, email_html = build_ticket_email(sample_nexus_context())
+    PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+    path = PREVIEWS_DIR / "ticket-email-body-nexus.html"
+    path.write_text(email_html, encoding="utf-8")
+    return path
+
+
 def main() -> None:
     shell, body = write_previews()
+    nexus_body = write_nexus_preview()
     print(f"wrote {shell}")
     print(f"wrote {body}")
+    print(f"wrote {nexus_body}")
     for path in write_ticket_samples():
         print(f"wrote {path}")
 

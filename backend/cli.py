@@ -13,6 +13,11 @@ from config import load_config
 from http_layer.app import create_app
 from seed_festival import DEFAULT_EVENT_SLUG, seed_festival_storefront
 from store import open_postgres
+from store.db_identity import (
+    database_target_label,
+    enforce_stable_database_target,
+    warn_if_likely_empty_render_postgres,
+)
 from store.migrate import migrate_store
 
 
@@ -22,17 +27,6 @@ def _setup_logging() -> None:
         level=logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
-
-
-def _database_log_label(database_url: str) -> str:
-    """Host and database name only (no credentials) for deploy logs."""
-    from urllib.parse import urlparse
-
-    raw = database_url.strip().replace("postgresql://", "postgres://", 1)
-    parsed = urlparse(raw)
-    host = parsed.hostname or "?"
-    db = (parsed.path or "").lstrip("/").split("?")[0] or "?"
-    return f"{host}/{db}"
 
 
 def _require_database_url(cfg) -> str:
@@ -140,12 +134,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
     os.makedirs(cfg.data_dir, mode=0o700, exist_ok=True)
 
     url = _require_database_url(cfg)
-    print(f"billetterie-api: PostgreSQL cible={_database_log_label(url)}", file=sys.stderr)
-    if os.getenv("CHANTIER3A_PYENV") == "production" and demo:
+    production = os.getenv("CHANTIER3A_PYENV") == "production"
+    print(f"billetterie-api: PostgreSQL cible={database_target_label(url)}", file=sys.stderr)
+    hint = warn_if_likely_empty_render_postgres(url)
+    if hint:
+        print(hint, file=sys.stderr)
+    if production and demo:
         print(
-            "billetterie-api: CHANTIER3A_DEMO est actif en production (desactivez-le pour conserver le coffre de clés).",
+            "billetterie-api: CHANTIER3A_DEMO est interdit en production (desactivez CHANTIER3A_DEMO).",
             file=sys.stderr,
         )
+        return 1
+    enforce_stable_database_target(cfg.data_dir, url, production=production)
     if not cfg.key_passphrase and not demo:
         print(
             "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",

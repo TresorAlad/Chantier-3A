@@ -1,11 +1,17 @@
-export function exportToCsv(filename: string, rows: Record<string, any>[]): void {
+export function exportToCsv(
+  filename: string,
+  rows: Record<string, any>[],
+  options?: { columnOrder?: string[]; headers?: Record<string, string> },
+): void {
   if (!rows || !rows.length) {
     alert("Aucune donnée à exporter.");
     return;
   }
 
-  const keys = Object.keys(rows[0]);
-  const header = keys.join(';');
+  const keys = options?.columnOrder?.length
+    ? options.columnOrder.filter((k) => k in rows[0]!)
+    : Object.keys(rows[0]!);
+  const header = keys.map((k) => options?.headers?.[k] ?? k).join(';');
   const content = rows.map(row => 
     keys.map(k => {
       let val = row[k];

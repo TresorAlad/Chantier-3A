@@ -48,3 +48,6 @@ services:
         value: manual
       - key: CHANTIER3A_PUBLIC_SIGNUP
         value: "0"
+      # Ne jamais activer en prod (refuse le demarrage si CHANTIER3A_PYENV=production)
+      - key: CHANTIER3A_DEMO
+        value: "0"

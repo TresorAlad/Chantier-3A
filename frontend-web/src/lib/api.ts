@@ -579,6 +579,8 @@ export interface CreateOrderBuyer {
     school_name?: string;
     motivation?: string;
     wish?: string;
+    /** Formulaire participant complet (TDEV Festival 2026), validé côté serveur. */
+    form?: Record<string, unknown>;
 }
 
 export interface CreateOrderInput {

@@ -35,6 +35,7 @@ const PASS_FESTIVAL_INCLUSIONS = [
 ];
 
 const NEXUS_NIGHT_INCLUSIONS = [
+    'Accès complet au festival inclus',
     'Soirée jeux et gaming',
     'Cosplay manga',
     'DJ set en direct',
@@ -70,7 +71,8 @@ export function getStaticBilletterieListing(): BilletterieListingProduct[] {
             subtitle: 'Soirée exclusive',
             priceLabel: nexusPrice,
             isFree: false,
-            description: 'Accès à la soirée Nexus Night : entertainment, gaming et ambiance festival.',
+            description:
+                'Accès aux deux jours du festival et à la soirée Nexus Night : entertainment, gaming et ambiance festival.',
             inclusions: NEXUS_NIGHT_INCLUSIONS,
             category: 'Soirée et entertainment',
             popular: false,

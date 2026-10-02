@@ -84,17 +84,28 @@ export interface OrderItem {
   ticket_type?: TicketType;
 }
 
+export interface OrderRegistration {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  school_name?: string;
+  motivation?: string;
+  wish?: string;
+  form?: Record<string, unknown>;
+}
+
 export interface Order {
   id: string;
   event_id: string;
   user_id?: string | null;
   buyer_email: string;
   buyer_name: string;
-  buyer_first_name: string;
-  buyer_last_name: string;
-  school_name: string;
-  motivation: string;
-  wish: string;
+  buyer_first_name?: string;
+  buyer_last_name?: string;
+  school_name?: string;
+  motivation?: string;
+  wish?: string;
+  registration?: OrderRegistration;
   status: OrderStatus;
   subtotal_minor: number;
   fee_minor: number;
@@ -251,13 +262,17 @@ export interface SystemSetting {
 
 // Vue enrichie pour les participants
 export interface Participant {
+  /** Identifiant de ligne (order_id : une inscription, même si plusieurs billets). */
   id: string;
   ticket_id: string;
+  ticket_ids: string[];
   order_id: string;
   name: string;
   first_name: string;
   last_name: string;
   email: string;
+  phone: string;
+  city: string;
   school: string;
   serial: string;
   pass_name: string;
@@ -270,6 +285,7 @@ export interface Participant {
   has_goodies: boolean;
   goodies_details?: string;
   admitted: boolean;
+  registration_form: Record<string, unknown>;
 }
 
 export interface DashboardKPIData {

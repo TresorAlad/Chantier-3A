@@ -35,6 +35,7 @@ class Order:
     school_name: str = ""
     motivation: str = ""
     wish: str = ""
+    registration_form: str = "{}"
 
 
 @dataclass
@@ -68,6 +69,7 @@ def _scan_order(row) -> Order:
             provider_ref=row["provider_ref"],
             created_at=text_to_time(row["created_at"]),
             paid_at=text_to_null_time(row["paid_at"]),
+            registration_form=row["registration_form"] or "{}",
         )
     return Order(
         id=row[0],
@@ -89,6 +91,7 @@ def _scan_order(row) -> Order:
         provider_ref=row[16],
         created_at=text_to_time(row[17]),
         paid_at=text_to_null_time(row[18]),
+        registration_form=row[19] or "{}",
     )
 
 
@@ -96,7 +99,7 @@ _ORDER_SELECT = """
         SELECT id, event_id, user_id, buyer_email, buyer_name,
                buyer_first_name, buyer_last_name, school_name, motivation, wish,
                status, subtotal_minor, fee_minor, total_minor, currency, provider,
-               provider_ref, created_at, paid_at
+               provider_ref, created_at, paid_at, registration_form
 """
 
 
@@ -213,8 +216,8 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
         INSERT INTO orders (id, event_id, user_id, buyer_email, buyer_name,
             buyer_first_name, buyer_last_name, school_name, motivation, wish,
             status, subtotal_minor, fee_minor, total_minor, currency, provider, provider_ref,
-            created_at, paid_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, paid_at, registration_form)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             order.id,
@@ -236,6 +239,7 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
             order.provider_ref,
             time_to_text(order.created_at),
             time_to_text(order.paid_at) if order.paid_at else None,
+            order.registration_form or "{}",
         ),
     )
 

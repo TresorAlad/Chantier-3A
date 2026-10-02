@@ -50,7 +50,10 @@ ENV_GOOGLE_CLIENT_SECRET = "CHANTIER3A_GOOGLE_CLIENT_SECRET"
 ENV_OAUTH_STATE_SECRET = "CHANTIER3A_OAUTH_STATE_SECRET"
 ENV_GOOGLE_REDIRECT_URI = "CHANTIER3A_GOOGLE_REDIRECT_URI"
 ENV_ADMIN_URL = "CHANTIER3A_ADMIN_URL"
+ENV_GOODIES_SHOP_URL = "CHANTIER3A_GOODIES_SHOP_URL"
 ENV_PORT = "PORT"
+
+DEFAULT_GOODIES_SHOP_URL = "https://shop.tdevfestival.com"
 
 DEFAULT_ADDR = ":8080"
 DEFAULT_DATA_DIR = "./data"
@@ -95,6 +98,7 @@ class Config:
     oauth_state_secret: str
     google_redirect_uri: str
     admin_url: str
+    goodies_shop_url: str
 
 
 def load_env_file() -> Path | None:
@@ -234,4 +238,5 @@ def load_config(
             f"{resolved_base.rstrip('/')}/api/auth/google/callback",
         ),
         admin_url=_env(ENV_ADMIN_URL),
+        goodies_shop_url=_env(ENV_GOODIES_SHOP_URL, DEFAULT_GOODIES_SHOP_URL),
     )

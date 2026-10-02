@@ -20,12 +20,25 @@ export const ordersService = {
 
     if (params.search) {
       const q = params.search.toLowerCase();
-      orders = orders.filter(
-        (o) =>
-          o.buyer_email?.toLowerCase().includes(q) ||
-          o.buyer_name?.toLowerCase().includes(q) ||
-          o.id?.toLowerCase().includes(q),
-      );
+      orders = orders.filter((o) => {
+        const reg = o.registration;
+        const form = reg?.form || {};
+        const haystack = [
+          o.buyer_email,
+          o.buyer_name,
+          o.id,
+          reg?.first_name,
+          reg?.last_name,
+          reg?.email,
+          form.first_name,
+          form.last_name,
+          form.email,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
     }
     if (params.status && params.status !== 'all') {
       orders = orders.filter((o) => o.status === params.status);

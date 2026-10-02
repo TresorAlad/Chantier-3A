@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users,
   Search,
-  Filter,
   Download,
   Eye,
-  FileSpreadsheet,
-  CheckCircle2,
-  XCircle,
+  FileText,
   ExternalLink,
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -18,24 +14,22 @@ import { participantsService } from '../services/participants.service';
 import { exportsService } from '../services/exports.service';
 import { useToast } from '../context/ToastContext';
 import { useEvent } from '../context/EventContext';
-import { formatMoney, formatDateTime } from '../lib/utils';
 import { Participant } from '../types';
 
 export const ParticipantsPage: React.FC = () => {
   const { eventId } = useEvent();
   const navigate = useNavigate();
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
-  // Filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [tierFilter, setTierFilter] = useState('all');
-  const [nexusFilter, setNexusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const limit = 10;
 
@@ -43,18 +37,21 @@ export const ParticipantsPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await participantsService.getAll({
-        search: searchTerm,
-        status: statusFilter,
-        pass_tier: tierFilter,
-        nexus: nexusFilter === 'all' ? undefined : nexusFilter === 'yes',
-        page,
-        limit,
-      }, eventId);
+      const res = await participantsService.getAll(
+        {
+          search: searchTerm,
+          status: statusFilter,
+          pass_tier: tierFilter,
+          page,
+          limit,
+        },
+        eventId,
+      );
       setParticipants(res.data);
       setTotal(res.total);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des participants.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur lors de la récupération des participants.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -62,16 +59,27 @@ export const ParticipantsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [searchTerm, statusFilter, tierFilter, nexusFilter, page, eventId]);
+  }, [searchTerm, statusFilter, tierFilter, page, eventId]);
 
   const handleExportCsv = async () => {
-    await exportsService.exportParticipants(eventId);
-    success('Export CSV réussi', 'Le fichier CSV des participants a été téléchargé.');
+    try {
+      await exportsService.exportParticipants(eventId);
+      success('Export CSV réussi', 'Le fichier contient tous les champs du formulaire d\'inscription.');
+    } catch {
+      toastError('Export impossible', 'Réessayez dans un instant.');
+    }
   };
 
-  const handleExportExcel = async () => {
-    await exportsService.exportParticipants(eventId);
-    success('Export Excel réussi', 'Le fichier Excel a été généré.');
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await exportsService.exportParticipantsPdf(eventId);
+      success('Export PDF réussi', 'Chaque inscription est détaillée dans le document.');
+    } catch {
+      toastError('Export PDF impossible', 'Réessayez dans un instant.');
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const totalPages = Math.ceil(total / limit) || 1;
@@ -79,34 +87,34 @@ export const ParticipantsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Gestion des Participants"
-        subtitle="Consultez, filtrez et exportez la liste complète des festivaliers inscrits"
+        title="Inscriptions participants"
+        subtitle="Aperçu rapide : consultez une fiche ou exportez le formulaire complet (CSV ou PDF)."
       >
         <button
-          onClick={handleExportCsv}
+          onClick={() => void handleExportCsv()}
           className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition-all"
         >
           <Download className="w-4 h-4 text-slate-500" />
-          Exporter CSV
+          Export CSV complet
         </button>
 
         <button
-          onClick={handleExportExcel}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold shadow-sm transition-all"
+          onClick={() => void handleExportPdf()}
+          disabled={exportingPdf}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-xs font-semibold shadow-sm transition-all"
         >
-          <FileSpreadsheet className="w-4 h-4" />
-          Exporter Excel
+          <FileText className="w-4 h-4" />
+          {exportingPdf ? 'Génération…' : 'Export PDF complet'}
         </button>
       </PageHeader>
 
-      {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-[260px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              type="text"
-              placeholder="Rechercher par nom, prénom, email, école..."
+              type="search"
+              placeholder="Rechercher par nom ou e-mail…"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -118,7 +126,6 @@ export const ParticipantsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
-          {/* Statut Paiement */}
           <select
             value={statusFilter}
             onChange={(e) => {
@@ -134,7 +141,6 @@ export const ParticipantsPage: React.FC = () => {
             <option value="failed">Échoué</option>
           </select>
 
-          {/* Niveau de pass */}
           <select
             value={tierFilter}
             onChange={(e) => {
@@ -144,43 +150,26 @@ export const ParticipantsPage: React.FC = () => {
             className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
           >
             <option value="all">Tous les passes</option>
+            <option value="student">Pass Festival</option>
+            <option value="vip">Nexus Night</option>
             <option value="standard">Standard</option>
-            <option value="vip">VIP</option>
-            <option value="student">Étudiant</option>
           </select>
-
-          {/* Nexus Night */}
-          <select
-            value={nexusFilter}
-            onChange={(e) => {
-              setNexusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-          >
-            <option value="all">Nexus Night (Tous)</option>
-            <option value="yes">Avec Nexus</option>
-            <option value="no">Sans Nexus</option>
-          </select>
-
         </div>
       </div>
 
-      {/* Main Content Area */}
       {loading ? (
         <TableSkeleton rows={6} />
       ) : error ? (
         <ErrorState message={error} onRetry={loadData} />
       ) : participants.length === 0 ? (
         <EmptyState
-          title="Aucun participant trouvé"
-          description="Essayez de modifier vos filtres ou termes de recherche pour afficher les festivaliers."
+          title="Aucune inscription trouvée"
+          description="Modifiez la recherche ou les filtres pour afficher les participants."
           actionText="Réinitialiser les filtres"
           onAction={() => {
             setSearchTerm('');
             setStatusFilter('all');
             setTierFilter('all');
-            setNexusFilter('all');
           }}
         />
       ) : (
@@ -189,13 +178,12 @@ export const ParticipantsPage: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-5">Participant</th>
-                  <th className="py-3.5 px-5">École / Univ</th>
-                  <th className="py-3.5 px-5">Billet & Série</th>
+                  <th className="py-3.5 px-5">Nom</th>
+                  <th className="py-3.5 px-5">E-mail</th>
+                  <th className="py-3.5 px-5">Type de pass</th>
+                  <th className="py-3.5 px-5">N° série</th>
+                  <th className="py-3.5 px-5">Ville</th>
                   <th className="py-3.5 px-5">Statut</th>
-                  <th className="py-3.5 px-5">Montant</th>
-                  <th className="py-3.5 px-5">Date</th>
-                  <th className="py-3.5 px-5 text-center">Nexus Night</th>
                   <th className="py-3.5 px-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -211,53 +199,24 @@ export const ParticipantsPage: React.FC = () => {
                         <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold flex items-center justify-center text-xs shrink-0">
                           {p.name.charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <span className="font-bold text-slate-900 block group-hover:text-violet-600 transition-colors">
-                            {p.name}
-                          </span>
-                          <span className="text-[11px] text-slate-400">{p.email}</span>
-                        </div>
+                        <span className="font-bold text-slate-900 group-hover:text-violet-600 transition-colors">
+                          {p.name}
+                        </span>
                       </div>
                     </td>
-
-                    <td className="py-4 px-5 text-slate-600 font-medium">
-                      {p.school || 'Autodidacte'}
-                    </td>
-
-                    <td className="py-4 px-5">
-                      <span className="font-bold text-slate-900 block">{p.pass_name}</span>
-                      <span className="text-[11px] font-mono text-slate-400">{p.serial}</span>
-                    </td>
-
+                    <td className="py-4 px-5 text-slate-600">{p.email}</td>
+                    <td className="py-4 px-5 font-semibold text-slate-900">{p.pass_name}</td>
+                    <td className="py-4 px-5 font-mono text-[11px] text-slate-500">{p.serial}</td>
+                    <td className="py-4 px-5 text-slate-600">{p.city || '—'}</td>
                     <td className="py-4 px-5">
                       <StatusBadge status={p.order_status} type="order" />
                     </td>
-
-                    <td className="py-4 px-5 font-bold text-slate-900">
-                      {formatMoney(p.amount_minor, p.currency)}
-                    </td>
-
-                    <td className="py-4 px-5 text-slate-500">
-                      {formatDateTime(p.issued_at)}
-                    </td>
-
-                    <td className="py-4 px-5 text-center">
-                      {p.is_nexus ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-pink-50 text-pink-700 border border-pink-200">
-                          <CheckCircle2 className="w-3 h-3 text-pink-600" /> Oui
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-
-
                     <td className="py-4 px-5 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => navigate(`/participants/${p.id}`)}
                           className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-slate-100 rounded-lg transition-colors"
-                          title="Consulter le profil"
+                          title="Voir le formulaire complet"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -276,10 +235,9 @@ export const ParticipantsPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Pagination */}
           <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <div>
-              Affichage {(page - 1) * limit + 1} à {Math.min(page * limit, total)} sur {total} festivaliers
+              Affichage {(page - 1) * limit + 1} à {Math.min(page * limit, total)} sur {total} inscriptions
             </div>
 
             <div className="flex items-center gap-1.5">
