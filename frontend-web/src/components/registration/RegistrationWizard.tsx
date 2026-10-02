@@ -6,7 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import {
     AGE_RANGE_OPTIONS,
     COUNTRY_OPTIONS,
@@ -152,21 +162,17 @@ export function RegistrationWizard({ passTitle, isFree, submitting, onSubmit }: 
                             hint="Facultatif"
                         />
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <Field label="Pays de résidence" htmlFor="country" error={errors.country} required>
-                                <select
-                                    id="country"
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    value={values.country}
-                                    onChange={(ev) => set('country', ev.target.value)}
-                                >
-                                    <option value="">Sélectionnez un pays</option>
-                                    {COUNTRY_OPTIONS.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </Field>
+                            <SelectField
+                                id="country"
+                                label="Pays de résidence"
+                                placeholder="Choisir votre pays"
+                                options={COUNTRY_OPTIONS}
+                                value={values.country}
+                                onChange={(value) => set('country', value)}
+                                error={errors.country}
+                                required
+                                groupedCountries
+                            />
                             <Field label="Ville de résidence" htmlFor="city" error={errors.city} required>
                                 <Input
                                     id="city"
@@ -217,8 +223,10 @@ export function RegistrationWizard({ passTitle, isFree, submitting, onSubmit }: 
 
                 {step === 2 && (
                     <>
-                        <ChoiceField
+                        <SelectField
+                            id="situation"
                             label="Situation actuelle"
+                            placeholder="Choisir votre situation"
                             options={SITUATION_OPTIONS}
                             value={values.situation}
                             onChange={(value) => set('situation', value)}
@@ -336,8 +344,10 @@ export function RegistrationWizard({ passTitle, isFree, submitting, onSubmit }: 
 
                 {step === 5 && (
                     <>
-                        <ChoiceField
+                        <SelectField
+                            id="discovery_channel"
                             label="Comment avez-vous connu le TDEV Festival ?"
+                            placeholder="Choisir une réponse"
                             options={DISCOVERY_CHANNEL_OPTIONS}
                             value={values.discovery_channel}
                             onChange={(value) => set('discovery_channel', value)}
@@ -456,6 +466,124 @@ export function RegistrationWizard({ passTitle, isFree, submitting, onSubmit }: 
     );
 }
 
+const CHOICE_CARD_BASE =
+    'flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 text-sm leading-snug transition-all duration-200 shadow-sm';
+const CHOICE_CARD_SELECTED = 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-md';
+const CHOICE_CARD_IDLE = 'border-border/70 bg-card/40 hover:border-primary/35 hover:bg-muted/30';
+
+/** Pays affichés par région dans le menu déroulant. */
+const COUNTRY_GROUP_WEST = new Set([
+    'Togo',
+    'Bénin',
+    'Burkina Faso',
+    "Côte d'Ivoire",
+    'Ghana',
+    'Niger',
+    'Nigeria',
+    'Sénégal',
+    'Mali',
+    'Cameroun',
+    'Gabon',
+    'Congo',
+    'République démocratique du Congo',
+]);
+const COUNTRY_GROUP_NORTH = new Set(['Maroc', 'Tunisie']);
+function SelectField(props: {
+    id: string;
+    label: string;
+    placeholder: string;
+    options: ChoiceOption[];
+    value: string;
+    onChange: (value: string) => void;
+    error?: string | undefined;
+    hint?: string;
+    required?: boolean;
+    groupedCountries?: boolean;
+}) {
+    const hasValue = Boolean(props.value);
+    return (
+        <div className="space-y-2">
+            <Label htmlFor={props.id}>
+                {props.label}
+                {props.required && <span className="ml-1 text-destructive">*</span>}
+            </Label>
+            <Select value={hasValue ? props.value : undefined} onValueChange={props.onChange}>
+                <SelectTrigger
+                    id={props.id}
+                    aria-invalid={Boolean(props.error)}
+                    className={cn(
+                        'h-11 bg-background text-base sm:h-9 sm:text-sm',
+                        props.error && 'border-destructive focus:ring-destructive',
+                        !hasValue && 'text-muted-foreground',
+                    )}
+                >
+                    <SelectValue placeholder={props.placeholder} />
+                </SelectTrigger>
+                <SelectContent
+                    position="popper"
+                    sideOffset={6}
+                    className="max-h-[min(18rem,55vh)] w-[var(--radix-select-trigger-width)] rounded-xl border-border/80 p-1 shadow-lg"
+                >
+                    {props.groupedCountries ? (
+                        <>
+                            <CountrySelectGroup
+                                label="Afrique de l'Ouest et centrale"
+                                options={props.options.filter((o) => COUNTRY_GROUP_WEST.has(o.value))}
+                            />
+                            <CountrySelectGroup
+                                label="Afrique du Nord"
+                                options={props.options.filter((o) => COUNTRY_GROUP_NORTH.has(o.value))}
+                            />
+                            <CountrySelectGroup
+                                label="Europe et Amérique"
+                                options={props.options.filter((o) =>
+                                    ['France', 'Canada', 'Belgique'].includes(o.value),
+                                )}
+                            />
+                            <CountrySelectGroup
+                                label="Autre"
+                                options={props.options.filter((o) => o.value === 'Autre pays')}
+                            />
+                        </>
+                    ) : (
+                        props.options.map((option) => (
+                            <SelectItem
+                                key={option.value}
+                                value={option.value}
+                                className="rounded-lg py-2.5 pl-3 pr-9 text-sm focus:bg-primary/10 focus:text-foreground"
+                            >
+                                {option.label}
+                            </SelectItem>
+                        ))
+                    )}
+                </SelectContent>
+            </Select>
+            {props.hint && !props.error && <p className="text-xs text-muted-foreground">{props.hint}</p>}
+            {props.error && <p className="text-xs text-destructive">{props.error}</p>}
+        </div>
+    );
+}
+
+function CountrySelectGroup(props: { label: string; options: ChoiceOption[] }) {
+    if (props.options.length === 0) return null;
+    return (
+        <SelectGroup>
+            <SelectLabel className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {props.label}
+            </SelectLabel>
+            {props.options.map((option) => (
+                <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="rounded-lg py-2.5 pl-3 pr-9 text-sm focus:bg-primary/10 focus:text-foreground"
+                >
+                    {option.label}
+                </SelectItem>
+            ))}
+        </SelectGroup>
+    );
+}
+
 function Field(props: {
     label: string;
     htmlFor: string;
@@ -492,20 +620,22 @@ function ChoiceField(props: {
                 {props.label}
                 {props.required && <span className="ml-1 text-destructive">*</span>}
             </Label>
-            <RadioGroup value={props.value} onValueChange={props.onChange} className="grid gap-2 sm:grid-cols-2">
-                {props.options.map((option) => (
-                    <label
-                        key={option.value}
-                        className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 text-sm transition-colors ${
-                            props.value === option.value
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border/60 hover:border-primary/40'
-                        }`}
-                    >
-                        <RadioGroupItem value={option.value} />
-                        <span className="leading-tight">{option.label}</span>
-                    </label>
-                ))}
+            <RadioGroup value={props.value} onValueChange={props.onChange} className="grid gap-2.5 sm:grid-cols-2">
+                {props.options.map((option) => {
+                    const selected = props.value === option.value;
+                    return (
+                        <label
+                            key={option.value}
+                            className={cn(
+                                CHOICE_CARD_BASE,
+                                selected ? CHOICE_CARD_SELECTED : CHOICE_CARD_IDLE,
+                            )}
+                        >
+                            <RadioGroupItem value={option.value} className="mt-0.5 shrink-0" />
+                            <span>{option.label}</span>
+                        </label>
+                    );
+                })}
             </RadioGroup>
             {props.hint && !props.error && <p className="text-xs text-muted-foreground">{props.hint}</p>}
             {props.error && <p className="text-xs text-destructive">{props.error}</p>}
@@ -527,18 +657,23 @@ function MultiChoiceField(props: {
                 {props.label}
                 <span className="ml-1 text-destructive">*</span>
             </Label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2.5 sm:grid-cols-2">
                 {props.options.map((option) => {
                     const checked = props.selected.includes(option.value);
                     return (
                         <label
                             key={option.value}
-                            className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 text-sm transition-colors ${
-                                checked ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/40'
-                            }`}
+                            className={cn(
+                                CHOICE_CARD_BASE,
+                                checked ? CHOICE_CARD_SELECTED : CHOICE_CARD_IDLE,
+                            )}
                         >
-                            <Checkbox checked={checked} onCheckedChange={() => props.onToggle(option.value)} />
-                            <span className="leading-tight">{option.label}</span>
+                            <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => props.onToggle(option.value)}
+                                className="mt-0.5 shrink-0"
+                            />
+                            <span>{option.label}</span>
                         </label>
                     );
                 })}
