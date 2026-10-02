@@ -17,6 +17,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 billetterie-api migrate
 billetterie-api serve
+
 ```
 
 Documentation : [backend/README.md](./backend/README.md).

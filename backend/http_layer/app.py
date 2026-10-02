@@ -30,6 +30,7 @@ from http_layer.routes import (
     scan,
     stubs,
     tickets,
+    dashboard_admin,
 )
 from http_layer.session import check_csrf, extract_token
 from spa import mount_spa
@@ -44,35 +45,92 @@ def create_app(
     services: AppServices | None = None,
 ) -> FastAPI:
     """Create a configured FastAPI application for the given store and services."""
-    app = FastAPI(title="Chantier 3A Billetterie", version="0.1.0")
+
+    app = FastAPI(
+        title="Chantier 3A Billetterie",
+        version="0.1.0",
+    )
+
     app.state.store = store
     app.state.config = config
     app.state.services = services or build_services(store, config)
-    app.add_exception_handler(_Unauthorized, unauthorized_handler)
 
-    origins = [config.base_url.rstrip("/")] if config.base_url else ["*"]
+    app.add_exception_handler(
+        _Unauthorized,
+        unauthorized_handler,
+    )
+
+    # ============================================================
+    # CORS
+    # ============================================================
+
+    origins = [
+        config.base_url.rstrip("/") if config.base_url else "",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+
+    origins = [
+        origin
+        for origin in origins
+        if origin
+    ]
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+        allow_methods=[
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+        ],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-CSRF-Token",
+        ],
     )
 
+    # ============================================================
+    # SESSION MIDDLEWARE
+    # ============================================================
+
     @app.middleware("http")
-    async def session_middleware(request: Request, call_next):
+    async def session_middleware(
+        request: Request,
+        call_next,
+    ):
         """Session middleware."""
+
         token, via_cookie = extract_token(request)
+
         user = None
+
         if token:
             try:
-                user = auth_svc.validate_session(app.state.store, token)
+                user = auth_svc.validate_session(
+                    app.state.store,
+                    token,
+                )
             except auth_svc.SessionInvalid:
                 user = None
+
             if user and via_cookie and not check_csrf(
-                request, token, via_cookie, app.state.config.session_secret
+                request,
+                token,
+                via_cookie,
+                app.state.config.session_secret,
             ):
-                return json_error(403, "forbidden", "CSRF token missing or invalid")
+                return json_error(
+                    403,
+                    "forbidden",
+                    "CSRF token missing or invalid",
+                )
+
         request.state.app_state = AppState(
             store=app.state.store,
             config=app.state.config,
@@ -81,34 +139,96 @@ def create_app(
             session_token=token,
             auth_via_cookie=via_cookie,
         )
+
         response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+
+        response.headers.setdefault(
+            "X-Content-Type-Options",
+            "nosniff",
+        )
+
+        response.headers.setdefault(
+            "X-Frame-Options",
+            "DENY",
+        )
+
+        response.headers.setdefault(
+            "Referrer-Policy",
+            "strict-origin-when-cross-origin",
+        )
+
         return response
+
+    # ============================================================
+    # ROOT ROUTERS
+    # ============================================================
 
     app.include_router(meta.root_router)
     app.include_router(media.router)
 
-    api = APIRouter(prefix="/api")
+    # ============================================================
+    # API
+    # ============================================================
+
+    api = APIRouter(
+        prefix="/api",
+    )
+
+    # Meta
     api.include_router(meta.api_router)
+
+    # Contact
     api.include_router(contact.router)
+
+    # Authentication
     api.include_router(auth.router)
+
+    # Events
     api.include_router(events.router)
     api.include_router(events_admin.router)
     api.include_router(events_admin.ticket_router)
+
+    # Organizations
     api.include_router(orgs.router)
     api.include_router(orgs.invites_router)
+
+    # Event pages
     api.include_router(event_pages.router)
+
+    # Orders
     api.include_router(orders.router)
+
+    # Payments
     api.include_router(payments.router)
+
+    # Tickets
     api.include_router(tickets.router)
+
+    # Scanner
     api.include_router(scan.router)
+
+    # Extras
     api.include_router(extras.router)
     api.include_router(extras.images_router)
-    app.add_middleware(ScanRateLimitMiddleware)
+
+    # Admin dashboard
+    api.include_router(dashboard_admin.router)
+
+    # Scan rate limit
+    app.add_middleware(
+        ScanRateLimitMiddleware
+    )
+
+    # Stub routes
     stubs.register_stubs(api)
+
+    # Register API
     app.include_router(api)
 
+    # ============================================================
+    # SPA FALLBACK
+    # ============================================================
+
     mount_spa(app)
+
     return app
