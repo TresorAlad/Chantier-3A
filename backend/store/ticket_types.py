@@ -28,6 +28,10 @@ class TicketType:
     sort_order: int
     product_kind: str
     pass_tier: str | None = None
+    access_event: bool = True
+    access_food: bool = False
+    access_merch: bool = False
+    access_after: bool = False
 
 
 def get_ticket_type_by_id(st: Store, ticket_type_id: str) -> TicketType:
@@ -36,7 +40,8 @@ def get_ticket_type_by_id(st: Store, ticket_type_id: str) -> TicketType:
         """
         SELECT id, event_id, name, description, price_minor, quantity_total,
                quantity_sold, sales_start, sales_end, max_per_order, status,
-               sort_order, product_kind, pass_tier
+               sort_order, product_kind, pass_tier, access_event, access_food,
+               access_merch, access_after
         FROM ticket_types WHERE id = ?
         """,
         (ticket_type_id,),
@@ -59,6 +64,10 @@ def get_ticket_type_by_id(st: Store, ticket_type_id: str) -> TicketType:
             sort_order=int(row["sort_order"]),
             product_kind=row["product_kind"] or PRODUCT_KIND_TICKET,
             pass_tier=row["pass_tier"],
+            access_event=bool(row["access_event"]),
+            access_food=bool(row["access_food"]),
+            access_merch=bool(row["access_merch"]),
+            access_after=bool(row["access_after"]),
         )
     return TicketType(
         id=row[0],
@@ -75,6 +84,10 @@ def get_ticket_type_by_id(st: Store, ticket_type_id: str) -> TicketType:
         sort_order=int(row[11]),
         product_kind=row[12] or PRODUCT_KIND_TICKET,
         pass_tier=row[13] if len(row) > 13 else None,
+        access_event=bool(row[14]) if len(row) > 14 else True,
+        access_food=bool(row[15]) if len(row) > 15 else False,
+        access_merch=bool(row[16]) if len(row) > 16 else False,
+        access_after=bool(row[17]) if len(row) > 17 else False,
     )
 
 
@@ -96,6 +109,10 @@ def _row_ticket_type(row) -> TicketType:
             sort_order=int(row["sort_order"]),
             product_kind=row["product_kind"] or PRODUCT_KIND_TICKET,
             pass_tier=row["pass_tier"],
+            access_event=bool(row["access_event"]),
+            access_food=bool(row["access_food"]),
+            access_merch=bool(row["access_merch"]),
+            access_after=bool(row["access_after"]),
         )
     return TicketType(
         id=row[0],
@@ -112,6 +129,10 @@ def _row_ticket_type(row) -> TicketType:
         sort_order=int(row[11]),
         product_kind=row[12] or PRODUCT_KIND_TICKET,
         pass_tier=row[13] if len(row) > 13 else None,
+        access_event=bool(row[14]) if len(row) > 14 else True,
+        access_food=bool(row[15]) if len(row) > 15 else False,
+        access_merch=bool(row[16]) if len(row) > 16 else False,
+        access_after=bool(row[17]) if len(row) > 17 else False,
     )
 
 
@@ -121,7 +142,8 @@ def list_ticket_types_for_event(st: Store, event_id: str) -> list[TicketType]:
         """
         SELECT id, event_id, name, description, price_minor, quantity_total,
                quantity_sold, sales_start, sales_end, max_per_order, status,
-               sort_order, product_kind, pass_tier
+               sort_order, product_kind, pass_tier, access_event, access_food,
+               access_merch, access_after
         FROM ticket_types WHERE event_id = ?
         ORDER BY sort_order ASC, id ASC
         """,
@@ -138,8 +160,9 @@ def create_ticket_type(st: Store, tt: TicketType) -> None:
         """
         INSERT INTO ticket_types (
             id, event_id, name, description, price_minor, quantity_total, quantity_sold,
-            sales_start, sales_end, max_per_order, status, sort_order, product_kind, pass_tier
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            sales_start, sales_end, max_per_order, status, sort_order, product_kind, pass_tier,
+            access_event, access_food, access_merch, access_after
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             tt.id,
@@ -156,6 +179,10 @@ def create_ticket_type(st: Store, tt: TicketType) -> None:
             tt.sort_order,
             tt.product_kind,
             tt.pass_tier,
+            tt.access_event,
+            tt.access_food,
+            tt.access_merch,
+            tt.access_after,
         ),
     )
 
@@ -169,7 +196,8 @@ def update_ticket_type(st: Store, tt: TicketType) -> None:
         UPDATE ticket_types SET
             name = ?, description = ?, price_minor = ?, quantity_total = ?,
             sales_start = ?, sales_end = ?, max_per_order = ?, status = ?,
-            sort_order = ?, product_kind = ?, pass_tier = ?
+            sort_order = ?, product_kind = ?, pass_tier = ?, access_event = ?,
+            access_food = ?, access_merch = ?, access_after = ?
         WHERE id = ?
         """,
         (
@@ -184,6 +212,10 @@ def update_ticket_type(st: Store, tt: TicketType) -> None:
             tt.sort_order,
             tt.product_kind,
             tt.pass_tier,
+            tt.access_event,
+            tt.access_food,
+            tt.access_merch,
+            tt.access_after,
             tt.id,
         ),
     )

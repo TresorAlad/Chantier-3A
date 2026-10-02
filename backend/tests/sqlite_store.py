@@ -12,7 +12,10 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Iterator
+
+from psycopg.pq import TransactionStatus
 
 from store.paths import MIGRATIONS_DIR
 from store.store import Store
@@ -144,6 +147,14 @@ class SqliteConn:
     def commit(self) -> None:
         """No-op: statements outside ``transaction()`` autocommit (``isolation_level=None``)."""
 
+    def rollback(self) -> None:
+        """No-op for the same reason: nothing is pending outside ``transaction()``."""
+
+    @property
+    def info(self) -> Any:
+        """Stand-in for ``psycopg.Connection.info``: SQLite never has an implicit transaction open."""
+        return SimpleNamespace(transaction_status=TransactionStatus.IDLE)
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
@@ -175,5 +186,8 @@ def open_sqlite_store(path: str | Path) -> Store:
     """Create a fresh SQLite database at ``path`` with all migrations applied."""
     conn = SqliteConn(path)
     for migration in sorted(Path(MIGRATIONS_DIR).glob("*.sql")):
-        conn.executescript(translate_migration(migration.read_text(encoding="utf-8")))
+        sql = migration.read_text(encoding="utf-8")
+        if sql.startswith("-- pg-only"):  # PostgreSQL-only migration (check-in module): not applicable to SQLite
+            continue
+        conn.executescript(translate_migration(sql))
     return Store(_pg=conn)  # type: ignore[arg-type]

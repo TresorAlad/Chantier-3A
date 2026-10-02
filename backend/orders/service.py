@@ -298,13 +298,14 @@ class OrdersService:
 
         def mint(conn) -> list[tickets_repo.Ticket]:
             out: list[tickets_repo.Ticket] = []
+            drawn: set[str] = set()
             for item in items:
                 tt = tt_repo.get_ticket_type_by_id(self._store, item.ticket_type_id)
                 kind = tt.product_kind or tt_repo.PRODUCT_KIND_TICKET
                 if kind != tt_repo.PRODUCT_KIND_TICKET:
                     continue
                 for _ in range(item.quantity):
-                    ref = pass_serial.next_pass_ref(self._store, conn, ref_year)
+                    ref = pass_serial.next_pass_ref(self._store, conn, ref_year, drawn)
                     tid = new_ulid()
                     payload = cap.Payload(
                         tid=tid,

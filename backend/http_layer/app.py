@@ -18,6 +18,7 @@ from http_layer.errors import json_error
 from http_layer.middleware.rate_limit import AuthRateLimitMiddleware, ScanRateLimitMiddleware
 from http_layer.routes import (
     auth,
+    checkin as checkin_routes,
     contact,
     event_pages,
     events,
@@ -113,6 +114,7 @@ def create_app(
     api.include_router(payments.router)
     api.include_router(tickets.router)
     api.include_router(scan.router)
+    api.include_router(checkin_routes.router)
     api.include_router(extras.router)
     api.include_router(extras.images_router)
     app.add_middleware(ScanRateLimitMiddleware)

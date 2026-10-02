@@ -176,7 +176,7 @@ def create_order_with_items(
         order.status = "pending"
 
     conn = st.primary
-    with conn.transaction():
+    with st.transaction():
         return _create_order_tx(st, conn, order, lines)
 
 
@@ -266,7 +266,7 @@ def _create_order_tx(st, conn, order: Order, lines: list[OrderLine]):
 def cancel_order_release_inventory(st: Store, order_id: str) -> bool:
     """Cancel order release inventory."""
     conn = st.primary
-    with conn.transaction():
+    with st.transaction():
         return _cancel_order_tx(st, conn, order_id)
 
 
@@ -304,7 +304,7 @@ def settle_order(
 ) -> bool:
     """Settle order."""
     conn = st.primary
-    with conn.transaction():
+    with st.transaction():
         return _settle_order_tx(st, conn, order_id, paid_at, tickets, mint)
 
 

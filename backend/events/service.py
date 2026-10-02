@@ -91,6 +91,12 @@ def ticket_type_to_json(tt: tt_repo.TicketType) -> dict:
         "status": tt.status,
         "sort_order": tt.sort_order,
         "product_kind": tt.product_kind,
+        "scan_rights": {
+            "event_entry": tt.access_event,
+            "food_access": tt.access_food,
+            "merch_pickup": tt.access_merch,
+            "after_entry": tt.access_after,
+        },
     }
     if tt.pass_tier:
         out["pass_tier"] = tt.pass_tier
@@ -401,6 +407,9 @@ def _validate_ticket_type_input(body: dict, *, existing: tt_repo.TicketType | No
     max_default = existing.max_per_order if existing else 0
     if int(body.get("max_per_order", max_default)) < 0:
         raise InvalidInput("max_per_order cannot be negative")
+    for field in ("access_event", "access_food", "access_merch", "access_after"):
+        if field in body and not isinstance(body[field], bool):
+            raise InvalidInput(f"{field} must be a boolean")
     if "pass_tier" in body:
         tier = pass_catalog.normalize_pass_tier(body.get("pass_tier"))
     elif existing is not None:
@@ -436,6 +445,10 @@ def create_ticket_type(st: Store, event_id: str, body: dict) -> dict:
         product_kind=(body.get("product_kind") or tt_repo.PRODUCT_KIND_TICKET).strip()
         or tt_repo.PRODUCT_KIND_TICKET,
         pass_tier=pass_catalog.normalize_pass_tier(body.get("pass_tier")),
+        access_event=bool(body.get("access_event", True)),
+        access_food=bool(body.get("access_food", False)),
+        access_merch=bool(body.get("access_merch", False)),
+        access_after=bool(body.get("access_after", False)),
     )
     tt_repo.create_ticket_type(st, tt)
     return ticket_type_to_json(tt)
@@ -467,6 +480,10 @@ def update_ticket_type(st: Store, tt_id: str, body: dict) -> dict:
             if "pass_tier" in body
             else existing.pass_tier
         ),
+        access_event=bool(body.get("access_event", existing.access_event)),
+        access_food=bool(body.get("access_food", existing.access_food)),
+        access_merch=bool(body.get("access_merch", existing.access_merch)),
+        access_after=bool(body.get("access_after", existing.access_after)),
     )
     tt_repo.update_ticket_type(st, tt)
     return ticket_type_to_json(tt)

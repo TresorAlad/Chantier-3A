@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "psycopg[binary]>=3.2.0",
+    "psycopg-pool>=3.2.0",
     "argon2-cffi>=23.1.0",
     "python-ulid>=3.0.0",
     "pydantic-settings>=2.6.0",
@@ -24,6 +25,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "zxing-cpp>=2.2.0"]
+# Load tests of the check-in API (backend/tests/load/README.md): pip install -e ".[load]"
+load = ["locust>=2.29"]
 
 [project.scripts]
 billetterie-api = "cli:main"
@@ -39,6 +42,7 @@ py-modules = ["cli", "config", "bootstrap", "spa", "seed_festival"]
 where = ["."]
 include = [
     "auth*",
+    "checkin*",
     "events*",
     "http_layer*",
     "money*",
