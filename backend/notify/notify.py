@@ -42,6 +42,10 @@ class NotifyService:
             self._sent_orders.add(order_id)
         threading.Thread(target=self._send_confirmation, args=(order_id,), daemon=True).start()
 
+    def resend_order_confirmation(self, order_id: str) -> None:
+        """Staff-triggered re-send of the ticket e-mail (ignores the paid-order dedup cache)."""
+        threading.Thread(target=self._send_confirmation, args=(order_id,), daemon=True).start()
+
     def _send_confirmation(self, order_id: str) -> None:
         """Send confirmation on ``NotifyService``."""
         try:

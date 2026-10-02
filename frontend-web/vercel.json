@@ -7,6 +7,10 @@
     {
       "source": "/media/:path*",
       "destination": "https://chantier-3a.onrender.com/media/:path*"
+    },
+    {
+      "source": "/((?!api/|media/).*)",
+      "destination": "/index.html"
     }
   ]
 }

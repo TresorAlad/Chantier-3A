@@ -1,0 +1,118 @@
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { EventProvider, useEvent } from './context/EventContext';
+import { AdminLayout } from './components/layout/AdminLayout';
+
+import { DashboardPage } from './pages/DashboardPage';
+import { ParticipantsPage } from './pages/ParticipantsPage';
+import { ParticipantDetailPage } from './pages/ParticipantDetailPage';
+import { TicketsPage } from './pages/TicketsPage';
+import { TicketTypesPage } from './pages/TicketTypesPage';
+import { NexusNightPage } from './pages/NexusNightPage';
+import { AdmissionsPage } from './pages/AdmissionsPage';
+import { LoginPage } from './pages/LoginPage';
+import { OrdersPage } from './pages/OrdersPage';
+import { OrderDetailPage } from './pages/OrderDetailPage';
+import { UsersPage } from './pages/UsersPage';
+import { EventSettingsPage } from './pages/EventSettingsPage';
+import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
+
+import { getAdminRoute } from '@/lib/env';
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading, staffAccessDenied, verifyStaffAccess, logout } = useAuth();
+  const { eventId, loading: eventLoading } = useEvent();
+  const adminRoute = getAdminRoute();
+
+  useEffect(() => {
+    if (isAuthenticated && eventId && !eventLoading) {
+      verifyStaffAccess(eventId);
+    }
+  }, [isAuthenticated, eventId, eventLoading, verifyStaffAccess]);
+
+  if (isLoading || (isAuthenticated && eventLoading)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+        <div className="w-8 h-8 border-4 border-green-800 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to={`${adminRoute}/login`} replace />;
+  }
+
+  if (staffAccessDenied) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-[#F8FAFC]">
+        <h1 className="text-xl font-bold text-slate-900">Accès refusé</h1>
+        <p className="text-sm text-slate-600 text-center max-w-md">
+          Votre compte n’a pas les droits administrateur sur cet événement.
+        </p>
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="rounded-xl bg-green-800 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Se déconnecter
+        </button>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+export const AdminApp: React.FC = () => {
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'robots');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', 'noindex, nofollow');
+  }, []);
+
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <EventProvider>
+          <Routes>
+            <Route path="login" element={<LoginPage />} />
+            <Route path="auth/callback" element={<AuthCallbackPage />} />
+            <Route path="accept-invite" element={<AcceptInvitePage />} />
+
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="event" element={<EventSettingsPage />} />
+              <Route path="participants" element={<ParticipantsPage />} />
+              <Route path="participants/:id" element={<ParticipantDetailPage />} />
+              <Route path="orders" element={<OrdersPage />} />
+              <Route path="orders/:id" element={<OrderDetailPage />} />
+              <Route path="tickets" element={<TicketsPage />} />
+              <Route path="ticket-types" element={<TicketTypesPage />} />
+              <Route path="nexus-night" element={<NexusNightPage />} />
+              <Route path="admissions" element={<AdmissionsPage />} />
+              <Route path="team" element={<UsersPage />} />
+              <Route path="*" element={<Navigate to="dashboard" replace />} />
+            </Route>
+          </Routes>
+        </EventProvider>
+      </AuthProvider>
+    </ToastProvider>
+  );
+};
+
+export default AdminApp;

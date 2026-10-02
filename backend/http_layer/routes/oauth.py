@@ -3,7 +3,10 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Request, Response, Depends
+from fastapi.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth
 from auth import service as auth
 from http_layer.deps import AppState, get_app_state
@@ -53,6 +56,9 @@ async def auth_google(request: Request):
         "CHANTIER3A_GOOGLE_REDIRECT_URI",
         f"{config.base_url.rstrip('/')}/api/auth/google/callback",
     )
+    nxt = (request.query_params.get("next") or "").strip()
+    if nxt:
+        request.session["oauth_next"] = nxt
     return await oauth_gle.google.authorize_redirect(request, redirect_uri=redirect_uri)
 
 @router.get("/auth/google/callback")
@@ -103,6 +109,15 @@ async def google_callback(request: Request, state: AppState = Depends(get_app_st
             state.config.access_token_expire_minutes,
             auth_method="OAuth2/google",
         )
+        oauth_next = (request.session.pop("oauth_next", None) or "").strip()
+        admin_base = (state.config.admin_url or "").rstrip("/")
+        if oauth_next == "admin" and admin_base:
+            fragment = (
+                f"token={quote(access_token, safe='')}"
+                f"&refresh_token={quote(refresh_token, safe='')}"
+            )
+            return RedirectResponse(f"{admin_base}/auth/callback#{fragment}", status_code=302)
+
         payload = {
             "user": _user_view(user),
             "token": access_token,
@@ -125,4 +140,7 @@ async def google_callback(request: Request, state: AppState = Depends(get_app_st
         return resp
     except Exception:
         logging.exception("Google OAuth callback failed")
+        admin_base = (state.config.admin_url or "").rstrip("/")
+        if admin_base:
+            return RedirectResponse(f"{admin_base}/login?error=oauth_failed", status_code=302)
         return json_error(500, "internal_error", "Google OAuth failed")

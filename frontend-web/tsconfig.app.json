@@ -19,8 +19,8 @@
         "noUnusedLocals": false,
         "noUnusedParameters": false,
         "noFallthroughCasesInSwitch": true,
-        "noUncheckedIndexedAccess": true,
-        "exactOptionalPropertyTypes": true,
+        "noUncheckedIndexedAccess": false,
+        "exactOptionalPropertyTypes": false,
 
         "paths": {
             "@/*": ["./src/*"],

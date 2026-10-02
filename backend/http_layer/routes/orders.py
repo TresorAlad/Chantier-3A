@@ -225,9 +225,16 @@ def get_order(order_id: str, state: AppState = Depends(require_user)):
         order = state.services.orders.get(order_id)
     except NotFoundError:
         return json_error(404, "not_found", "order not found")
-    if not order.user_id or order.user_id != state.current_user.id:
+    is_buyer = bool(order.user_id and order.user_id == state.current_user.id)
+    is_staff = rbac.can_manage_event(
+        state.store, state.current_user.id, order.event_id, rbac.ROLE_ADMIN
+    )
+    if not is_buyer and not is_staff:
         return json_error(404, "not_found", "order not found")
-    return {"order": _order_json(order)}
+    payload = _order_json(order)
+    if is_staff:
+        payload["tickets"] = _guest_tickets_json(state.store, order_id)
+    return {"order": payload}
 
 
 @router.get("/orders/{order_id}/guest")
@@ -315,39 +322,25 @@ def guest_ticket_png(
     )
 
 
-@router.get("/orders/{order_id}/guest/ticket.pdf")
-def guest_ticket_pdf(
-    order_id: str,
-    email: str = Query(""),
-    ticket: str = Query(""),
-    state: AppState = Depends(get_app_state),
-):
-    """PDF pass (same render as e-mail attachment) for guest download."""
-    buyer_email = email.strip().lower()
-    if not buyer_email:
-        return json_error(400, "invalid_request", "email query parameter is required")
-    try:
-        order = state.services.orders.get(order_id)
-    except NotFoundError:
-        return json_error(404, "not_found", "order not found")
-    if order.buyer_email.strip().lower() != buyer_email:
-        return json_error(404, "not_found", "order not found")
+def build_ticket_pdf_bytes(state: AppState, order_id: str, *, ticket_id: str = "") -> tuple[bytes, str]:
+    """Render one ticket PDF for an order (staff or guest flows)."""
+    order = state.services.orders.get(order_id)
     if order.status != "paid":
-        return json_error(400, "invalid_request", "ticket not available until order is paid")
+        raise ValueError("not_paid")
     tickets = _guest_tickets_json(state.store, order_id)
     if not tickets:
-        return json_error(404, "not_found", "no ticket issued for this order")
-    ticket_id = ticket.strip()
+        raise ValueError("no_tickets")
     picked = None
-    if ticket_id:
+    tid = ticket_id.strip()
+    if tid:
         for row in tickets:
-            if row["id"] == ticket_id:
+            if row["id"] == tid:
                 picked = row
                 break
     if picked is None:
         picked = tickets[0]
     if not picked.get("capability"):
-        return json_error(404, "not_found", "ticket capability missing")
+        raise ValueError("no_capability")
     reg = _registration_json(order)
     holder = f"{reg.get('first_name', '')} {reg.get('last_name', '')}".strip() or order.buyer_name
     venue = picked.get("event_venue_name") or ""
@@ -372,7 +365,33 @@ def guest_ticket_pdf(
             capability=picked["capability"],
         )
     )
-    filename = f"billet-{picked['serial']}.pdf"
+    return pdf, f"billet-{picked['serial']}.pdf"
+
+
+@router.get("/orders/{order_id}/guest/ticket.pdf")
+def guest_ticket_pdf(
+    order_id: str,
+    email: str = Query(""),
+    ticket: str = Query(""),
+    state: AppState = Depends(get_app_state),
+):
+    """PDF pass (same render as e-mail attachment) for guest download."""
+    buyer_email = email.strip().lower()
+    if not buyer_email:
+        return json_error(400, "invalid_request", "email query parameter is required")
+    try:
+        order = state.services.orders.get(order_id)
+    except NotFoundError:
+        return json_error(404, "not_found", "order not found")
+    if order.buyer_email.strip().lower() != buyer_email:
+        return json_error(404, "not_found", "order not found")
+    try:
+        pdf, filename = build_ticket_pdf_bytes(state, order_id, ticket_id=ticket.strip())
+    except ValueError as err:
+        code = str(err)
+        if code == "not_paid":
+            return json_error(400, "invalid_request", "ticket not available until order is paid")
+        return json_error(404, "not_found", "ticket not found")
     return Response(
         content=pdf,
         media_type="application/pdf",

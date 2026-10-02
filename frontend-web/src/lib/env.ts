@@ -4,17 +4,45 @@
  * ne jamais y mettre de secrets (clés API privées, mots de passe, tokens).
  */
 
-const DEFAULT_ADMIN_ROUTE = '/acces-admin-billetterie';
+const MIN_ADMIN_ROUTE_LEN = 12;
 
-/** Chemin interne de la page admin (obscurité, pas un secret). */
-export function getAdminRoute(): string {
-    const raw = import.meta.env.VITE_ADMIN_ROUTE?.trim();
-    if (!raw) return DEFAULT_ADMIN_ROUTE;
-    if (raw.includes('..') || !/^\/[\w/-]+$/.test(raw)) {
-        return DEFAULT_ADMIN_ROUTE;
+function normalizeAdminRoute(raw: string): string | null {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.includes('..') || !/^\/[\w/-]+$/.test(trimmed)) {
+        return null;
     }
-    const normalized = raw.replace(/\/+$/, '');
-    return normalized || DEFAULT_ADMIN_ROUTE;
+    const normalized = trimmed.replace(/\/+$/, '');
+    if (!normalized || normalized.length < MIN_ADMIN_ROUTE_LEN) {
+        return null;
+    }
+    return normalized;
+}
+
+/** Chemin interne du dashboard admin (obscurité, pas un secret). Absent = admin désactivé. */
+export function getAdminRoute(): string | null {
+    const raw = import.meta.env.VITE_ADMIN_ROUTE?.trim();
+    if (!raw) {
+        if (import.meta.env.DEV) {
+            console.warn(
+                '[billetterie] VITE_ADMIN_ROUTE manquant : le dashboard admin n’est pas monté.',
+            );
+        }
+        return null;
+    }
+    const route = normalizeAdminRoute(raw);
+    if (!route) {
+        if (import.meta.env.DEV) {
+            console.warn(
+                '[billetterie] VITE_ADMIN_ROUTE invalide ou trop court (min. 12 caractères).',
+            );
+        }
+        return null;
+    }
+    return route;
+}
+
+export function isAdminEnabled(): boolean {
+    return getAdminRoute() !== null;
 }
 
 export function getFestivalEventSlug(): string | undefined {

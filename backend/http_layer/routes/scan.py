@@ -337,7 +337,23 @@ def list_attendees(event_id: str, state: AppState = Depends(require_user)):
     rows = state.store.fetchall(
         """SELECT t.id, t.order_id, t.serial, t.holder_name, t.status, t.ticket_type_id,
                   tt.name AS ticket_type_name, tt.pass_tier,
-                  o.buyer_email, o.buyer_first_name, o.buyer_last_name, o.school_name
+                  o.buyer_email, o.buyer_first_name, o.buyer_last_name, o.school_name,
+                  (SELECT a.scanned_at FROM admissions a
+                   WHERE a.ticket_id = t.id AND a.result = 'admitted'
+                   ORDER BY a.scanned_at ASC, a.id ASC LIMIT 1) AS admitted_at,
+                  (SELECT a.control_type FROM admissions a
+                   WHERE a.ticket_id = t.id AND a.result = 'admitted'
+                   ORDER BY a.scanned_at ASC, a.id ASC LIMIT 1) AS control_type,
+                  (SELECT a.gate_id FROM admissions a
+                   WHERE a.ticket_id = t.id AND a.result = 'admitted'
+                   ORDER BY a.scanned_at ASC, a.id ASC LIMIT 1) AS gate_id,
+                  (SELECT a.device_id FROM admissions a
+                   WHERE a.ticket_id = t.id AND a.result = 'admitted'
+                   ORDER BY a.scanned_at ASC, a.id ASC LIMIT 1) AS device_id,
+                  EXISTS(
+                    SELECT 1 FROM admissions a
+                    WHERE a.ticket_id = t.id AND a.result = 'admitted'
+                  ) AS admitted
            FROM tickets t
            JOIN ticket_types tt ON tt.id = t.ticket_type_id
            JOIN orders o ON o.id = t.order_id
@@ -347,6 +363,9 @@ def list_attendees(event_id: str, state: AppState = Depends(require_user)):
     )
     attendees = []
     for row in rows:
+        admitted_raw = row["admitted"] if hasattr(row, "keys") else row[-1]
+        admitted = bool(admitted_raw) if admitted_raw not in (0, "0", False, None) else False
+        admitted_at = row["admitted_at"] if hasattr(row, "keys") else None
         attendees.append({
             "ticket_id": row["id"], "order_id": row["order_id"], "serial": row["serial"],
             "holder_name": row["holder_name"], "status": row["status"],
@@ -354,5 +373,11 @@ def list_attendees(event_id: str, state: AppState = Depends(require_user)):
             "pass_type": row["pass_tier"] or row["ticket_type_name"], "email": row["buyer_email"],
             "first_name": row["buyer_first_name"] or "", "last_name": row["buyer_last_name"] or "",
             "school_name": row["school_name"] or "",
+            "admitted": admitted,
+            "admitted_at": admitted_at,
+            "control_type": row["control_type"] if hasattr(row, "keys") else None,
+            "gate_id": row["gate_id"] if hasattr(row, "keys") else None,
+            "device_id": row["device_id"] if hasattr(row, "keys") else None,
+            "scanned_at": admitted_at,
         })
     return {"attendees": attendees}

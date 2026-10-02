@@ -49,6 +49,7 @@ ENV_GOOGLE_CLIENT_ID = "CHANTIER3A_GOOGLE_CLIENT_ID"
 ENV_GOOGLE_CLIENT_SECRET = "CHANTIER3A_GOOGLE_CLIENT_SECRET"
 ENV_OAUTH_STATE_SECRET = "CHANTIER3A_OAUTH_STATE_SECRET"
 ENV_GOOGLE_REDIRECT_URI = "CHANTIER3A_GOOGLE_REDIRECT_URI"
+ENV_ADMIN_URL = "CHANTIER3A_ADMIN_URL"
 ENV_PORT = "PORT"
 
 DEFAULT_ADDR = ":8080"
@@ -93,6 +94,7 @@ class Config:
     google_client_secret: str
     oauth_state_secret: str
     google_redirect_uri: str
+    admin_url: str
 
 
 def load_env_file() -> Path | None:
@@ -231,4 +233,5 @@ def load_config(
             ENV_GOOGLE_REDIRECT_URI,
             f"{resolved_base.rstrip('/')}/api/auth/google/callback",
         ),
+        admin_url=_env(ENV_ADMIN_URL),
     )
