@@ -2,6 +2,24 @@
 
 Guide pour déployer le backend FastAPI (`backend/`) sur [Render](https://render.com) avec PostgreSQL et stockage persistant pour les médias et le coffre de clés.
 
+## Les inscriptions « disparaissent » après chaque deploy
+
+Les **migrations au démarrage n effacent pas** les commandes ni les billets. Si tout semble vide après un build, l API utilise en pratique **une autre base PostgreSQL** qu avant.
+
+Cas fréquent :
+
+| Cause | Correctif |
+|-------|-----------|
+| `CHANTIER3A_DATABASE_URL` pointe vers le **Postgres Render** (souvent vide) alors que le seed a été fait sur **Neon** | Dans Environment Render, coller l URL **Neon** (identique a `backend/.env` local). **Save**, redeploy. |
+| L URL a ete remplacee par une liaison **fromDatabase** du blueprint | Definir `CHANTIER3A_DATABASE_URL` a la main (`sync: false`), ne pas lier au Postgres Render si vous utilisez Neon. |
+| `CHANTIER3A_DEMO=1` en production | Mettre `0` ou supprimer la variable. |
+
+Controle : logs Render au demarrage, ligne `billetterie-api: PostgreSQL cible=.../neondb`. Le **host** doit rester le meme a chaque deploy (ex. `…neon.tech`). Si le host change, les donnees sont sur une autre base.
+
+Une seule base de verite : **Neon** pour prod TDEV, avec `KEY_PASSPHRASE` identique au seed local.
+
+---
+
 ## Option recommandée : projet Render (Production)
 
 Dans le dashboard : **My Workspace** > votre projet (ex. `billeterie`) > **Production** > **New** (ou **Add service**). Créer les ressources **dans cet ordre**.

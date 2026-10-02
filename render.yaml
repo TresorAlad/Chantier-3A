@@ -2,11 +2,15 @@
 # Deploy: Dashboard Render > New > Blueprint > connecter ce depot.
 # Doc pas a pas: backend/docs/RENDER.md
 
-databases:
-  - name: chantier3a-db
-    databaseName: chantier3a
-    user: chantier3a
-    plan: basic-256mb
+# Postgres Render optionnel. Pour TDEV Festival, utiliser Neon (seed local) :
+# ne pas lier CHANTIER3A_DATABASE_URL au Postgres Render via fromDatabase,
+# sinon l API pointe vers une base vide distincte de Neon et les inscriptions semblent effacees.
+#
+# databases:
+#   - name: chantier3a-db
+#     databaseName: chantier3a
+#     user: chantier3a
+#     plan: basic-256mb
 
 services:
   - type: web
@@ -29,9 +33,7 @@ services:
       - key: CHANTIER3A_MEDIA_DIR
         value: /srv/data/media
       - key: CHANTIER3A_DATABASE_URL
-        fromDatabase:
-          name: chantier3a-db
-          property: connectionString
+        sync: false
       - key: CHANTIER3A_BASE_URL
         sync: false
       - key: CHANTIER3A_KEY_PASSPHRASE

@@ -24,6 +24,17 @@ def _setup_logging() -> None:
     )
 
 
+def _database_log_label(database_url: str) -> str:
+    """Host and database name only (no credentials) for deploy logs."""
+    from urllib.parse import urlparse
+
+    raw = database_url.strip().replace("postgresql://", "postgres://", 1)
+    parsed = urlparse(raw)
+    host = parsed.hostname or "?"
+    db = (parsed.path or "").lstrip("/").split("?")[0] or "?"
+    return f"{host}/{db}"
+
+
 def _require_database_url(cfg) -> str:
     """Internal: require database url."""
     url = (cfg.database_url or "").strip()
@@ -129,6 +140,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     os.makedirs(cfg.data_dir, mode=0o700, exist_ok=True)
 
     url = _require_database_url(cfg)
+    print(f"billetterie-api: PostgreSQL cible={_database_log_label(url)}", file=sys.stderr)
+    if os.getenv("CHANTIER3A_PYENV") == "production" and demo:
+        print(
+            "billetterie-api: CHANTIER3A_DEMO est actif en production (desactivez-le pour conserver le coffre de clés).",
+            file=sys.stderr,
+        )
     if not cfg.key_passphrase and not demo:
         print(
             "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",
