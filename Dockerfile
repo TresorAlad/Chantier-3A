@@ -8,6 +8,7 @@ WORKDIR /app
 
 COPY backend/pyproject.toml backend/README.md ./
 COPY backend/auth ./auth/
+COPY backend/checkin ./checkin/
 COPY backend/events ./events/
 COPY backend/http_layer ./http_layer/
 COPY backend/money ./money/

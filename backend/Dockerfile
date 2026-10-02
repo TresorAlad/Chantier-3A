@@ -13,6 +13,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY auth ./auth/
+COPY checkin ./checkin/
 COPY events ./events/
 COPY http_layer ./http_layer/
 COPY money ./money/
