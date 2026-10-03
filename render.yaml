@@ -32,6 +32,8 @@ services:
         value: /srv/data
       - key: CHANTIER3A_MEDIA_DIR
         value: /srv/data/media
+      # Obligatoire : URL pooler Neon (meme base que seed-festival local), PAS le Postgres Render vide.
+      # Ex. postgresql://USER:PASS@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
       - key: CHANTIER3A_DATABASE_URL
         sync: false
       - key: CHANTIER3A_BASE_URL

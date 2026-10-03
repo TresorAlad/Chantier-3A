@@ -2,6 +2,14 @@
 
 Guide pour déployer le backend FastAPI (`backend/`) sur [Render](https://render.com) avec PostgreSQL et stockage persistant pour les médias et le coffre de clés.
 
+## Checklist base de donnees (Render + Neon)
+
+1. **Une seule URL** : `CHANTIER3A_DATABASE_URL` = pooler **Neon** (copie de `backend/.env` local), jamais le Postgres Render du blueprint sauf base dediee seedee.
+2. **Apres chaque changement d URL** : logs au boot `PostgreSQL cible=…neon.tech/neondb` ; `curl …/healthz?db=1` → `"database":"up"` et le meme `database_target`.
+3. **Verrou disque** : `/srv/data/.chantier3a_db_identity` bloque un changement accidentel d hote (service en echec au deploy plutot que billetterie vide).
+4. **Refus automatique** : en production, une URL `*.render.com` est **refusee** au demarrage sauf `CHANTIER3A_ALLOW_RENDER_POSTGRES=1`.
+5. **Neon sans sslmode** : le backend ajoute `sslmode=require` si absent.
+
 ## Les inscriptions « disparaissent » après chaque deploy
 
 Les **migrations au démarrage n effacent pas** les commandes ni les billets. Si tout semble vide après un build, l API utilise en pratique **une autre base PostgreSQL** qu avant.
@@ -133,7 +141,7 @@ SMTP, FedaPay, Google OAuth : voir tableau ci-dessous et [`PRODUCTION-FEDAPAY.md
 | Ressource | Rôle |
 |-----------|------|
 | **Web Service** `chantier3a-api` | Image Docker (`backend/Dockerfile`), migrations au démarrage, écoute sur `PORT` |
-| **PostgreSQL** `chantier3a-db` | Base obligatoire (`CHANTIER3A_DATABASE_URL`) |
+| **PostgreSQL** (optionnel dans le blueprint) | Ne pas lier automatiquement : utiliser **Neon** via `CHANTIER3A_DATABASE_URL` (`sync: false`) |
 | **Disque 1 Go** monté sur `/srv/data` | Médias uploadés, secret de session fichier, coffre |
 
 ### Étapes

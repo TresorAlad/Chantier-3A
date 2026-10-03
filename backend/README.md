@@ -111,6 +111,8 @@ Relancer `billetterie-api migrate` est **idempotent** : seules les versions non 
 |----------|--------|
 | `CHANTIER3A_DATABASE_URL is required` | Copier `.env.example` vers `.env` ou exporter la variable |
 | Connexion PostgreSQL refusée | Vérifier URL, SSL (`sslmode=require`), pare-feu, IP autorisée |
+| Render : billetterie vide ou deploy en echec | URL Neon identique au seed ; voir [`docs/RENDER.md`](docs/RENDER.md). Postgres Render refuse par defaut (`CHANTIER3A_ALLOW_RENDER_POSTGRES=1` si base Render seedee) |
+| `la cible PostgreSQL a change` | Remettre l URL Neon d origine ou `CHANTIER3A_ALLOW_DATABASE_URL_CHANGE=1` une fois |
 | `migrations directory missing` | Vérifier que le dossier `migrations/` est présent dans le dépôt |
 
 ---

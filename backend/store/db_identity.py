@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import sys
 from urllib.parse import urlparse
 
 
@@ -64,6 +65,56 @@ def enforce_stable_database_target(
         os.chmod(path, 0o600)
     except OSError:
         pass
+
+
+def normalize_database_url(database_url: str) -> str:
+    """Ajoute sslmode=require pour Neon si absent (Render exige TLS)."""
+    url = database_url.strip()
+    if not url:
+        return url
+    host_segment = url.split("@", 1)[-1].lower() if "@" in url else url.lower()
+    if "neon.tech" in host_segment and "sslmode=" not in url.lower():
+        return f"{url}&sslmode=require" if "?" in url else f"{url}?sslmode=require"
+    return url
+
+
+def prepare_production_database_url(
+    database_url: str,
+    *,
+    data_dir: str,
+    production: bool,
+) -> str:
+    """
+    Normalise l URL, refuse le Postgres Render vide par defaut, verrouille host/db sur disque.
+    A appeler avant migrate et serve en production.
+    """
+    url = normalize_database_url(database_url)
+    assert_production_database_url(url, production=production)
+    enforce_stable_database_target(data_dir, url, production=production)
+    return url
+
+
+def assert_production_database_url(database_url: str, *, production: bool) -> None:
+    """En production, refuse le Postgres Render sauf opt-in explicite."""
+    if not production:
+        return
+    hint = warn_if_likely_empty_render_postgres(database_url)
+    if not hint:
+        return
+    allow = os.getenv("CHANTIER3A_ALLOW_RENDER_POSTGRES", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if allow:
+        print(f"billetterie-api: {hint}", file=sys.stderr)
+        return
+    raise SystemExit(
+        f"{hint} "
+        "Demarrage refuse en production. Collez l URL Neon (pooler) dans CHANTIER3A_DATABASE_URL. "
+        "Base Render dediee et seedee : CHANTIER3A_ALLOW_RENDER_POSTGRES=1."
+    )
 
 
 def warn_if_likely_empty_render_postgres(database_url: str) -> str | None:

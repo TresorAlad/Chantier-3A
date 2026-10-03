@@ -15,8 +15,7 @@ from seed_festival import DEFAULT_EVENT_SLUG, seed_festival_storefront
 from store import open_postgres
 from store.db_identity import (
     database_target_label,
-    enforce_stable_database_target,
-    warn_if_likely_empty_render_postgres,
+    prepare_production_database_url,
 )
 from store.migrate import migrate_store
 
@@ -49,7 +48,13 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     cfg = load_config(database_url=args.database_url or "")
     if env_path:
         print(f"Using environment file: {env_path}")
-    url = _require_database_url(cfg)
+    production = os.getenv("CHANTIER3A_PYENV") == "production"
+    url = prepare_production_database_url(
+        _require_database_url(cfg),
+        data_dir=cfg.data_dir,
+        production=production,
+    )
+    print(f"billetterie-api: PostgreSQL cible={database_target_label(url)}", file=sys.stderr)
     try:
         versions = migrate_store(database_url=url)
     except Exception as err:
@@ -133,19 +138,19 @@ def cmd_serve(args: argparse.Namespace) -> int:
     os.makedirs(cfg.media_dir, mode=0o700, exist_ok=True)
     os.makedirs(cfg.data_dir, mode=0o700, exist_ok=True)
 
-    url = _require_database_url(cfg)
     production = os.getenv("CHANTIER3A_PYENV") == "production"
+    url = prepare_production_database_url(
+        _require_database_url(cfg),
+        data_dir=cfg.data_dir,
+        production=production,
+    )
     print(f"billetterie-api: PostgreSQL cible={database_target_label(url)}", file=sys.stderr)
-    hint = warn_if_likely_empty_render_postgres(url)
-    if hint:
-        print(hint, file=sys.stderr)
     if production and demo:
         print(
             "billetterie-api: CHANTIER3A_DEMO est interdit en production (desactivez CHANTIER3A_DEMO).",
             file=sys.stderr,
         )
         return 1
-    enforce_stable_database_target(cfg.data_dir, url, production=production)
     if not cfg.key_passphrase and not demo:
         print(
             "billetterie-api: CHANTIER3A_KEY_PASSPHRASE is required when using PostgreSQL.",
