@@ -11,6 +11,7 @@ import uvicorn
 
 from config import load_config
 from http_layer.app import create_app
+from bootstrap_staff import bootstrap_staff_account
 from seed_festival import DEFAULT_EVENT_SLUG, seed_festival_storefront
 from store import open_postgres
 from store.db_identity import (
@@ -96,6 +97,39 @@ def cmd_seed_festival(args: argparse.Namespace) -> int:
     for tt in result["ticket_types"]:
         tier = tt.get("pass_tier") or "-"
         print(f"  - {tt['name']} ({tier}) price_minor={tt['price_minor']} id={tt['id']}")
+    return 0
+
+
+def cmd_bootstrap_staff(args: argparse.Namespace) -> int:
+    """Create or update owner/admin on org tdev (requires CHANTIER3A_BOOTSTRAP_STAFF=1)."""
+    cfg = load_config(database_url=args.database_url or "")
+    production = os.getenv("CHANTIER3A_PYENV") == "production"
+    url = prepare_production_database_url(
+        _require_database_url(cfg),
+        data_dir=cfg.data_dir,
+        production=production,
+    )
+    store = open_postgres(url)
+    try:
+        result = bootstrap_staff_account(
+            store,
+            email=args.email,
+            password=args.password,
+            name=args.name or args.email.split("@")[0],
+            org_slug=args.org_slug,
+            role=args.role,
+        )
+    except SystemExit as err:
+        print(err, file=sys.stderr)
+        return 1
+    except Exception as err:
+        print(f"billetterie-api bootstrap-staff failed: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+    print(f"Staff OK: {result['email']} ({result['user_action']}, {result['member_action']})")
+    print("Connexion admin: https://billeterie-kohl.vercel.app/gestion-dev-local-admin/login")
     return 0
 
 
@@ -219,6 +253,26 @@ def main() -> None:
         help=f"Event slug (default {DEFAULT_EVENT_SLUG})",
     )
 
+    p_staff = sub.add_parser(
+        "bootstrap-staff",
+        help="Create/update staff on org tdev (CHANTIER3A_BOOTSTRAP_STAFF=1)",
+    )
+    p_staff.add_argument("--email", required=True, help="Staff e-mail")
+    p_staff.add_argument("--password", required=True, help="Mot de passe (8+ caracteres)")
+    p_staff.add_argument("--name", default="", help="Nom affiche")
+    p_staff.add_argument("--org-slug", default="tdev", help="Slug organisation")
+    p_staff.add_argument(
+        "--role",
+        default="owner",
+        choices=("owner", "admin", "scanner"),
+        help="Role org",
+    )
+    p_staff.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
+
     p_reset = sub.add_parser("reset-password", help="Print a password reset token to stdout")
     p_reset.add_argument("email", help="Account email address")
     p_reset.add_argument(
@@ -234,6 +288,8 @@ def main() -> None:
         raise SystemExit(cmd_seed_festival(args))
     if args.command == "serve":
         raise SystemExit(cmd_serve(args))
+    if args.command == "bootstrap-staff":
+        raise SystemExit(cmd_bootstrap_staff(args))
     if args.command == "reset-password":
         raise SystemExit(cmd_reset_password(args))
 

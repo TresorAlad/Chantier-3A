@@ -53,4 +53,12 @@ npm run dev
 # http://localhost:5173/gestion-dev-local-admin/login
 ```
 
-Staff : compte créé via invitation (`/team`) ou seed backend, pas via inscription publique si `public_signup: false`.
+Staff : compte via invitation (`/team`) ou commande (base Neon = prod) :
+
+```bash
+cd backend
+export CHANTIER3A_BOOTSTRAP_STAFF=1
+billetterie-api bootstrap-staff --email vous@example.com --password 'MotDePasse8+' --name 'Votre nom'
+```
+
+L’inscription publique (`/api/auth/signup`) est désactivée en prod sauf `CHANTIER3A_PUBLIC_SIGNUP=1`.
