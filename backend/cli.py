@@ -123,7 +123,7 @@ def cmd_seed_festival(args: argparse.Namespace) -> int:
 
 def cmd_bootstrap_staff(args: argparse.Namespace) -> int:
     """Create or update owner/admin on org tdev (requires CHANTIER3A_BOOTSTRAP_STAFF=1)."""
-    from bootstrap_staff import bootstrap_staff_account
+    from bootstrap import bootstrap_staff_account
 
     cfg = load_config(database_url=args.database_url or "")
     production = os.getenv("CHANTIER3A_PYENV") == "production"

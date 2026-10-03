@@ -1,9 +1,8 @@
-# API FastAPI billetterie. Contexte = répertoire backend-python :
-#   docker build -t billetterie-api .
-#   docker compose up --build
+# API FastAPI billetterie (Render : dockerContext=backend, target runtime par defaut).
+#   cd backend && docker build --target runtime -t billetterie-api .
 #
-# Image avec interface React (contexte = racine monorepo, frontend/ présent) :
-#   docker build -f backend-python/Dockerfile --target with-ui -t billetterie-api:ui ..
+# Variante avec UI embarquee (monorepo, dossier frontend/ a la racine) :
+#   docker build -f backend/Dockerfile --target with-ui -t billetterie-api:ui ..
 
 FROM python:3.12-slim-bookworm AS runtime
 # No apt-get here: keeps builds working when Debian mirrors are unreachable in CI/sandbox.
@@ -23,7 +22,7 @@ COPY payments ./payments/
 COPY scan ./scan/
 COPY store ./store/
 COPY tickets ./tickets/
-COPY cli.py config.py bootstrap.py bootstrap_staff.py spa.py seed_festival.py __init__.py __main__.py ./
+COPY cli.py config.py bootstrap.py spa.py seed_festival.py __init__.py __main__.py ./
 COPY migrations ./migrations
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

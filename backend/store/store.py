@@ -45,20 +45,26 @@ class Store:
     _vault: object | None = None
     _tx_depth: int = field(default=0, init=False, repr=False, compare=False)
 
-    def _ensure_connection(self) -> None:
-        if not self._database_url:
-            return
-        if self._pg.closed:
-            self._pg = _connect_postgres(self._database_url)
-            return
+    def _reconnect(self) -> None:
         try:
-            self._pg.check()
-        except psycopg.OperationalError:
+            self._pg.close()
+        except Exception:
+            pass
+        self._pg = _connect_postgres(self._database_url)
+
+    def _run_db(self, operation):
+        """Execute a DB operation; reconnect once on connection loss."""
+        if not self._database_url:
+            return operation()
+        for attempt in (1, 2):
             try:
-                self._pg.close()
-            except Exception:
-                pass
-            self._pg = _connect_postgres(self._database_url)
+                if self._pg.closed:
+                    self._reconnect()
+                return operation()
+            except (psycopg.OperationalError, psycopg.InterfaceError):
+                if attempt == 2:
+                    raise
+                self._reconnect()
 
     @property
     def primary(self) -> psycopg.Connection:
@@ -76,29 +82,33 @@ class Store:
 
     def execute_rowcount(self, query: str, args: tuple[Any, ...] = ()) -> int:
         """Execute rowcount on ``Store``."""
-        self._ensure_connection()
-        q = rebind_query(query)
-        try:
-            cur = self._pg.execute(q, args)
-        except Exception:
-            self._pg.rollback()  # a failed statement must not leave the shared connection aborted
-            raise
-        self._pg.commit()
-        return cur.rowcount
+        def run() -> int:
+            q = rebind_query(query)
+            try:
+                cur = self._pg.execute(q, args)
+            except Exception:
+                self._pg.rollback()
+                raise
+            self._pg.commit()
+            return cur.rowcount
+
+        return self._run_db(run)
 
     def fetchone(self, query: str, args: tuple[Any, ...] = ()) -> Any:
         """Fetchone on ``Store``."""
-        self._ensure_connection()
-        q = rebind_query(query)
-        cur = self._pg.execute(q, args)
-        return cur.fetchone()
+        def run():
+            q = rebind_query(query)
+            return self._pg.execute(q, args).fetchone()
+
+        return self._run_db(run)
 
     def fetchall(self, query: str, args: tuple[Any, ...] = ()) -> list[Any]:
         """Fetchall on ``Store``."""
-        self._ensure_connection()
-        q = rebind_query(query)
-        cur = self._pg.execute(q, args)
-        return cur.fetchall()
+        def run():
+            q = rebind_query(query)
+            return self._pg.execute(q, args).fetchall()
+
+        return self._run_db(run)
 
     @contextmanager
     def transaction(self) -> Iterator[None]:

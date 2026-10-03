@@ -16,7 +16,7 @@ services:
   - type: web
     name: chantier3a-api
     runtime: docker
-    dockerfilePath: backend/Dockerfile
+    dockerfilePath: Dockerfile
     dockerContext: backend
     plan: starter
     region: frankfurt
