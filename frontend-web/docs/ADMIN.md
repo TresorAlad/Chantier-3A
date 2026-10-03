@@ -23,7 +23,7 @@ Composants dans `src/admin/components/brand/` :
 | `AdminLoadingScreen` | Chargement session, OAuth, chunk admin (`main.tsx` Suspense) |
 | `AdminAuthShell` | Carte centrée (invitation équipe) |
 
-Assets partagés vitrine + admin : `src/components/brand/tdev-brand-assets.ts`.
+Assets partagés vitrine + admin : `src/components/brand/tdev-brand-assets.ts` (import Vite de `src/assets/brand/tdev-wordmark.png`, servi sous `/assets/…` en prod).
 
 Emplacements principaux : sidebar, header mobile, login, invitation, recherche globale, écran « accès refusé ».
 

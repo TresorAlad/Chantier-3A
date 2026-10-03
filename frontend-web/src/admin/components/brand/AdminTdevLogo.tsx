@@ -49,7 +49,7 @@ export function AdminTdevLogo({
     const imgClass = cn(
         'w-auto select-none object-contain object-left',
         isMark ? 'h-9 w-9 rounded-lg object-center' : HEIGHT[size],
-        (variant === 'onDark' || variant === 'markOnDark') && 'brightness-0 invert',
+        (variant === 'onDark' || variant === 'markOnDark') && 'invert',
         variant === 'markOnLight' && 'dark:invert',
         variant === 'markOnDark' && 'ring-1 ring-white/10 rounded-lg',
     );

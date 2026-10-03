@@ -14,7 +14,7 @@
       "statusCode": 307
     },
     {
-      "source": "/((?!api/|media/|assets/).*)",
+      "source": "/((?!api/|media/|assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]

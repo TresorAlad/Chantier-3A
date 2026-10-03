@@ -28,6 +28,7 @@ import {
     type BilletterieListingProduct,
 } from '@/lib/static-billetterie-catalog';
 import { checkoutFailureCopy, logCheckoutDiagnostic } from '@/lib/user-facing-checkout-error';
+import { TDEV_LOGO_URL } from '@/components/brand/tdev-brand-assets';
 import { downloadGuestTicketPdfForOrder } from '@/lib/download-guest-ticket-pdf';
 
 const isSafeRedirect = (url: string) => {
@@ -174,7 +175,7 @@ export default function App() {
                 <div className="container flex min-h-14 items-center justify-between gap-2 py-2 sm:h-16 sm:gap-3 sm:py-0">
                     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                         <img
-                            src="/image.png"
+                            src={TDEV_LOGO_URL}
                             className="h-8 w-auto shrink-0 dark:invert transition-all sm:h-9"
                             alt="TDEV Festival"
                         />
@@ -400,7 +401,7 @@ export default function App() {
             <footer className="border-t border-border/40 py-8 bg-muted/30 text-center text-sm text-muted-foreground">
                 <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
-                        <img src="/image.png" className="h-6 w-auto dark:invert" alt="T-Dev Logo" />
+                        <img src={TDEV_LOGO_URL} className="h-6 w-auto dark:invert" alt="T-Dev Logo" />
                         <span>© 2026 TDEV Festival. Tous droits réservés.</span>
                     </div>
                 </div>
