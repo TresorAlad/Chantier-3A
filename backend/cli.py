@@ -11,7 +11,6 @@ import uvicorn
 
 from config import load_config
 from http_layer.app import create_app
-from bootstrap_staff import bootstrap_staff_account
 from seed_festival import DEFAULT_EVENT_SLUG, seed_festival_storefront
 from store import open_postgres
 from store.db_identity import (
@@ -124,6 +123,8 @@ def cmd_seed_festival(args: argparse.Namespace) -> int:
 
 def cmd_bootstrap_staff(args: argparse.Namespace) -> int:
     """Create or update owner/admin on org tdev (requires CHANTIER3A_BOOTSTRAP_STAFF=1)."""
+    from bootstrap_staff import bootstrap_staff_account
+
     cfg = load_config(database_url=args.database_url or "")
     production = os.getenv("CHANTIER3A_PYENV") == "production"
     url = prepare_production_database_url(
