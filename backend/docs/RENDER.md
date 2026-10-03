@@ -72,9 +72,18 @@ CHANTIER3A_KEY_PASSPHRASE=<12+ caractères, à garder>
 CHANTIER3A_SESSION_SECRET=<générer>
 CHANTIER3A_SECRET_KEY=<générer>
 CHANTIER3A_OAUTH_STATE_SECRET=<générer>
+CHECKIN_SNAPSHOT_SIGNING_KEY=<générer avec python -m checkin.signing>
 CHANTIER3A_PAYMENT_PROVIDERS=manual
 CHANTIER3A_PUBLIC_SIGNUP=0
 ```
+
+`CHECKIN_SNAPSHOT_SIGNING_KEY` est une graine Ed25519 dédiée aux snapshots du contrôle hors ligne. Elle permet au backend de signer les droits et consommations téléchargés par le mobile ; l'application vérifie cette signature avant d'écrire les données localement. Elle ne remplace ni les secrets JWT ni la passphrase du coffre. La générer **une seule fois** depuis `backend/` :
+
+```bash
+python -m checkin.signing
+```
+
+Copier uniquement la valeur affichée après `CHECKIN_SNAPSHOT_SIGNING_KEY=` dans un secret Render, sans la committer. Après le déploiement, `GET /api/checkin/signing-key` doit répondre `200` avec `algorithm`, `kid` et `public_key`. Si la variable manque, cet endpoint répond `404 signing_not_configured` et le mobile refuse volontairement le snapshot non signé.
 
 Render injecte **`PORT`** ; ne pas définir `CHANTIER3A_ADDR`. Au premier deploy : migrations puis `serve` (entrypoint Docker).
 
@@ -134,6 +143,7 @@ SMTP, FedaPay, Google OAuth : voir tableau ci-dessous et [`PRODUCTION-FEDAPAY.md
 3. Render affiche les ressources du blueprint. Renseigner les variables marquées **sync: false** :
    - **`CHANTIER3A_BASE_URL`** : URL publique du site vue par le navigateur (ex. `https://app.example.com`). Utilisée pour CORS, liens e-mail et retours paiement. Doit pointer vers le front avec `/api` proxifié vers cette API, ou vers l'URL Render de l'API si le front appelle l'API en direct (ajuster CORS si besoin).
    - **`CHANTIER3A_KEY_PASSPHRASE`** : passphrase du coffre de clés (min. 12 caractères, **à conserver** ; perte = billets non vérifiables).
+   - **`CHECKIN_SNAPSHOT_SIGNING_KEY`** : secret Ed25519 généré avec `cd backend && python -m checkin.signing`. Il signe les données hors ligne du mobile et doit rester stable entre les déploiements.
 4. **Apply** et attendre le premier déploiement.
 
 Le conteneur exécute `billetterie-api migrate` puis `serve` (voir `docker-entrypoint.sh`). Santé : `GET /healthz`.
@@ -146,6 +156,7 @@ Le conteneur exécute `billetterie-api migrate` puis `serve` (voir `docker-entry
 | `CHANTIER3A_FEDAPAY_*` + `CHANTIER3A_PAYMENT_PROVIDERS=manual,fedapay` | Paiement FedaPay ([`PRODUCTION-FEDAPAY.md`](PRODUCTION-FEDAPAY.md)) |
 | `CHANTIER3A_GOOGLE_*` | Connexion Google OAuth |
 | `CHANTIER3A_CONTACT_TO` | Formulaire contact |
+| `CHECKIN_SNAPSHOT_SIGNING_KEY` | Obligatoire pour que le mobile accepte les snapshots hors ligne signés |
 
 Webhook FedaPay : `https://<nom-service>.onrender.com/api/payments/webhook/fedapay` (ou l'URL publique derrière votre proxy).
 
@@ -168,6 +179,7 @@ CHANTIER3A_BASE_URL=https://votre-domaine-public
 CHANTIER3A_KEY_PASSPHRASE=<passphrase-sécurisée>
 CHANTIER3A_SESSION_SECRET=<aléatoire>
 CHANTIER3A_SECRET_KEY=<aléatoire>
+CHECKIN_SNAPSHOT_SIGNING_KEY=<générer avec python -m checkin.signing>
 ```
 
 Render injecte **`PORT`** ; le backend l'utilise automatiquement (pas besoin de `CHANTIER3A_ADDR`).
@@ -202,6 +214,7 @@ Désactiver les migrations au boot (déconseillé sauf pipeline dédié) : `CHAN
 
 ```bash
 curl -sS "https://<votre-service>.onrender.com/healthz"
+curl -sS "https://<votre-service>.onrender.com/api/checkin/signing-key"
 ```
 
-Réponse attendue : JSON avec statut OK (voir [`API-FRONTEND.md`](API-FRONTEND.md)).
+Réponses attendues : santé en statut OK (voir [`API-FRONTEND.md`](API-FRONTEND.md)) et clé publique de snapshot avec `algorithm: Ed25519`.

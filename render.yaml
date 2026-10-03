@@ -44,6 +44,10 @@ services:
         generateValue: true
       - key: CHANTIER3A_OAUTH_STATE_SECRET
         generateValue: true
+      # Graine Ed25519 dediee aux snapshots hors ligne du mobile.
+      # Generer localement avec : cd backend && python -m checkin.signing
+      - key: CHECKIN_SNAPSHOT_SIGNING_KEY
+        sync: false
       - key: CHANTIER3A_PAYMENT_PROVIDERS
         value: manual
       - key: CHANTIER3A_PUBLIC_SIGNUP
