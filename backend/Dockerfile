@@ -23,7 +23,7 @@ COPY payments ./payments/
 COPY scan ./scan/
 COPY store ./store/
 COPY tickets ./tickets/
-COPY cli.py config.py bootstrap.py spa.py seed_festival.py __init__.py __main__.py ./
+COPY cli.py config.py bootstrap.py bootstrap_staff.py spa.py seed_festival.py __init__.py __main__.py ./
 COPY migrations ./migrations
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
