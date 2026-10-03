@@ -9,6 +9,7 @@ Guide pour déployer le backend FastAPI (`backend/`) sur [Render](https://render
 3. **Verrou disque** : `/srv/data/.chantier3a_db_identity` bloque un changement accidentel d hote (service en echec au deploy plutot que billetterie vide).
 4. **Refus automatique** : en production, une URL `*.render.com` est **refusee** au demarrage sauf `CHANTIER3A_ALLOW_RENDER_POSTGRES=1`.
 5. **Neon sans sslmode** : le backend ajoute `sslmode=require` si absent.
+6. **Login admin : « Service billetterie temporairement indisponible »** : l API tourne mais PostgreSQL non (`GET /healthz?db=1` → 503). Corriger `CHANTIER3A_DATABASE_URL` sur Render (copier l URL pooler Neon depuis `backend/.env` local), redeploy, puis `billetterie-api verify-db` en shell Render si disponible.
 
 ## Les inscriptions « disparaissent » après chaque deploy
 

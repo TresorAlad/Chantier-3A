@@ -41,6 +41,28 @@ def _require_database_url(cfg) -> str:
     return url
 
 
+def cmd_verify_db(args: argparse.Namespace) -> int:
+    """Ping PostgreSQL (SELECT 1) and print cible."""
+    cfg = load_config(database_url=args.database_url or "")
+    production = os.getenv("CHANTIER3A_PYENV") == "production"
+    url = prepare_production_database_url(
+        _require_database_url(cfg),
+        data_dir=cfg.data_dir,
+        production=production,
+    )
+    print(f"PostgreSQL cible={database_target_label(url)}", file=sys.stderr)
+    store = open_postgres(url)
+    try:
+        row = store.fetchone("SELECT 1 AS ok", ())
+        print(f"OK: {row}")
+        return 0
+    except Exception as err:
+        print(f"billetterie-api verify-db failed: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     """Apply SQL migrations using CHANTIER3A_* from .env (see README)."""
     from config import load_env_file
@@ -216,6 +238,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="billetterie-api", description="Ticketing API backend")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p_verify = sub.add_parser("verify-db", help="Test PostgreSQL connectivity (SELECT 1)")
+    p_verify.add_argument(
+        "--database-url",
+        default="",
+        help="Override CHANTIER3A_DATABASE_URL",
+    )
+
     p_migrate = sub.add_parser("migrate", help="Apply SQL migrations (PostgreSQL)")
     p_migrate.add_argument(
         "--database-url",
@@ -282,6 +311,8 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    if args.command == "verify-db":
+        raise SystemExit(cmd_verify_db(args))
     if args.command == "migrate":
         raise SystemExit(cmd_migrate(args))
     if args.command == "seed-festival":

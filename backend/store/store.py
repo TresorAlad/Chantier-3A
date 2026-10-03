@@ -24,12 +24,41 @@ class SoldOutError(Exception):
     pass
 
 
+def _connect_postgres(database_url: str) -> psycopg.Connection:
+    from store.db_identity import normalize_database_url
+
+    url = normalize_database_url(database_url)
+    kwargs: dict = {"row_factory": dict_row, "connect_timeout": 20}
+    if "neon.tech" in url.lower():
+        kwargs["keepalives"] = 1
+        kwargs["keepalives_idle"] = 30
+        kwargs["keepalives_interval"] = 10
+        kwargs["keepalives_count"] = 5
+    return psycopg.connect(url, **kwargs)
+
+
 @dataclass
 class Store:
     """Store."""
     _pg: psycopg.Connection
+    _database_url: str = ""
     _vault: object | None = None
     _tx_depth: int = field(default=0, init=False, repr=False, compare=False)
+
+    def _ensure_connection(self) -> None:
+        if not self._database_url:
+            return
+        if self._pg.closed:
+            self._pg = _connect_postgres(self._database_url)
+            return
+        try:
+            self._pg.check()
+        except psycopg.OperationalError:
+            try:
+                self._pg.close()
+            except Exception:
+                pass
+            self._pg = _connect_postgres(self._database_url)
 
     @property
     def primary(self) -> psycopg.Connection:
@@ -47,6 +76,7 @@ class Store:
 
     def execute_rowcount(self, query: str, args: tuple[Any, ...] = ()) -> int:
         """Execute rowcount on ``Store``."""
+        self._ensure_connection()
         q = rebind_query(query)
         try:
             cur = self._pg.execute(q, args)
@@ -58,12 +88,14 @@ class Store:
 
     def fetchone(self, query: str, args: tuple[Any, ...] = ()) -> Any:
         """Fetchone on ``Store``."""
+        self._ensure_connection()
         q = rebind_query(query)
         cur = self._pg.execute(q, args)
         return cur.fetchone()
 
     def fetchall(self, query: str, args: tuple[Any, ...] = ()) -> list[Any]:
         """Fetchall on ``Store``."""
+        self._ensure_connection()
         q = rebind_query(query)
         cur = self._pg.execute(q, args)
         return cur.fetchall()
@@ -87,9 +119,12 @@ class Store:
 
 def open_postgres(database_url: str) -> Store:
     """Open PostgreSQL and apply pending schema migrations."""
-    migrate_postgres(database_url)
-    pg = psycopg.connect(database_url, row_factory=dict_row)
-    return Store(_pg=pg)
+    from store.db_identity import normalize_database_url
+
+    url = normalize_database_url(database_url)
+    migrate_postgres(url)
+    pg = _connect_postgres(url)
+    return Store(_pg=pg, _database_url=url)
 
 
 def new_ulid() -> str:
