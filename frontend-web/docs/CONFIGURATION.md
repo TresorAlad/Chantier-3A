@@ -59,13 +59,17 @@ Clé publique FedaPay et environnement (`sandbox` par défaut, `live` en product
 
 ### `VITE_ADMIN_ROUTE`
 
-Chemin React Router pour `AdminLogin` (ex. `/acces-admin-billetterie`). Validé :
+Chemin React Router pour le dashboard admin (ex. `/gestion-dev-local-admin` en prod TDEV). Validé :
 
 - doit commencer par `/`
 - caractères : lettres, chiffres, `-`, `_`, `/`
 - pas de `..`
 
 Valeur par défaut si invalide : `/acces-admin-billetterie`.
+
+Production Vercel : le fichier `frontend-web/.env.production` du depot fixe souvent la route ; une variable **vide** dans le dashboard Vercel ecrase ce fichier et desactive l'admin. Aligner `vercel.json` (redirect racine admin vers `/login`).
+
+Detail fonctionnel : [ADMIN.md](./ADMIN.md).
 
 ### Réseaux sociaux
 

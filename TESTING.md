@@ -68,7 +68,7 @@ Numéros de test de la sandbox : `64000001` ou `66000001` = paiement accepté, `
 
 | # | Scénario | Actions | Résultat attendu |
 |---|----------|---------|------------------|
-| 1 | Pass gratuit | « Réserver gratuitement », remplir le formulaire, « Valider l'inscription » | Message « Inscription réussie ». Commande `paid`, un billet émis. Aucun widget FedaPay. |
+| 1 | Pass gratuit | Wizard 8 etapes (Pass Festival), « Valider l'inscription » | Message « Inscription réussie ». Commande `paid`, un billet émis. Aucun widget FedaPay. E-mail seulement si SMTP configure. |
 | 2 | Pass payant, succès | « Choisir ce pass », formulaire, « Continuer vers le paiement ». Le formulaire se ferme, le widget s'ouvre. Numéro `64000001`, « PAYER ». | Le montant du widget est celui du serveur (prix + frais FedaPay). Message « Paiement confirmé ». Commande `paid`, billet émis. |
 | 3 | Paiement refusé | Même parcours avec `64000000` | Le widget affiche « Transaction échouée. Veuillez reessayer » et reste ouvert. Après fermeture : message « Commande enregistrée… ». **Aucun billet.** |
 | 4 | Fermeture du widget | Ouvrir le widget, cliquer « Annuler le paiement » ou la croix | Widget fermé, message « Commande enregistrée… », aucun billet. `POST /api/payments/verify` répond 402. |
@@ -79,7 +79,7 @@ Après les scénarios 2 à 4, contrôler côté FedaPay (tableau de bord → *Tr
 
 ### E-mail et billet
 
-À faire si le SMTP est configuré (`CHANTIER3A_SMTP_HOST`, `CHANTIER3A_SMTP_FROM`, etc.). Sans SMTP, le backend écrit « SMTP not configured; skipping » et n'envoie rien. Pour tester sans vrai serveur, lancer un serveur SMTP local de débogage et le pointer avec ces variables.
+À faire si le SMTP est configuré (`CHANTIER3A_SMTP_HOST`, `CHANTIER3A_SMTP_FROM`, etc.). Sans SMTP, le backend écrit « SMTP not configured; skipping » et n'envoie rien (inscription et billet en base restent OK). Controle prod : `curl -sS https://<api>/api/public/site-config` → `"email_configured": true`. Pour tester sans vrai serveur, lancer un serveur SMTP local de débogage et le pointer avec ces variables.
 
 1. Après le scénario 1 ou 2, l'e-mail contient le PDF `billet-<serie>.pdf` et le bouton « Télécharger mon billet ».
 2. Le lien du bouton (`{CHANTIER3A_BASE_URL}/api/orders/<id>/guest/ticket.pdf?email=…`) doit télécharger le PDF. `CHANTIER3A_BASE_URL` doit donc être une URL où `/api/...` répond.

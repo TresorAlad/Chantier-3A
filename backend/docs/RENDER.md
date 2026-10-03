@@ -113,6 +113,8 @@ Vérifier : `GET https://chantier-3a.onrender.com/api/events/` doit lister au mo
 
 SMTP, FedaPay, Google OAuth : voir tableau ci-dessous et [`PRODUCTION-FEDAPAY.md`](PRODUCTION-FEDAPAY.md).
 
+**E-mails de billets apres inscription** : sans `CHANTIER3A_SMTP_HOST` et `CHANTIER3A_SMTP_FROM`, l'inscription reussit (commande `paid`, billet en base) mais **aucun e-mail n'est envoye** (`notify: SMTP not configured`). Verifier : `GET /api/public/site-config` → `email_configured: true`. Configurer SPF/DKIM pour le domaine expediteur.
+
 ---
 
 ## Option alternative : Blueprint

@@ -1,8 +1,8 @@
-/** Wordmark Tdev, fond transparent — texte noir (thème clair). */
-export const TDEV_LOGO_URL = '/TDev%20/logo%20TDev.png';
+/** Wordmark TDEV servi depuis `public/image.png` (thème clair). */
+export const TDEV_LOGO_URL = '/image.png';
 
-/** Variante texte blanc pour thème sombre. */
-export const TDEV_LOGO_DARK_URL = '/TDev%20/logo%20TDev-dark.png';
+/** Même fichier ; rendu blanc via filtre CSS sur fond sombre (`AdminTdevLogo` variant `onDark`). */
+export const TDEV_LOGO_DARK_URL = '/image.png';
 
-/** Vignette billet (fond vert) — carte pass / QR. */
-export const TDEV_TICKET_LOGO_URL = '/TDev%20/Tdev.png';
+/** Vignette compacte (sidebar, favicon visuel). */
+export const TDEV_TICKET_LOGO_URL = '/image.png';

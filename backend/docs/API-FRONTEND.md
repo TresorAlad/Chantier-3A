@@ -387,21 +387,38 @@ Corps :
     "email": "a@b.com",
     "first_name": "Prenom",
     "last_name": "Nom",
-    "school_name": "Universite / ecole",
-    "motivation": "Pourquoi suivre cette edition",
-    "wish": "Ce que vous attendez de l'evenement"
+    "form": {
+      "last_name": "Nom",
+      "first_name": "Prenom",
+      "email": "a@b.com",
+      "phone": "+228…",
+      "country": "Togo",
+      "city": "Lome",
+      "situation": "student",
+      "digital_level": "beginner",
+      "participation_reasons": ["learn_skills"],
+      "topics": ["ai"],
+      "consent_data_processing": true,
+      "consent_marketing": false
+    }
   },
   "provider": "manual"
 }
 ```
 
-Pour le **pass etudiant** (`pass_tier: student`), tous les champs `buyer` ci-dessus sont **obligatoires** (sauf `name`, legacy). Les autres types de billets peuvent n'envoyer que `email` et `name`.
+Pour les **passes festival** (gratuit etudiant ou bundle payant), le front envoie le **formulaire PDF V1** dans `buyer.form` (voir `backend/orders/registration.py` pour les enums et champs obligatoires). Le serveur normalise `first_name`, `last_name`, `email`, etc. et persiste le JSON dans `orders.registration_form`.
+
+Champs legacy (`school_name`, `motivation`, `wish`) restent acceptes si `form` est absent ; preferer `form` pour les nouvelles integrations.
+
+**Pass VIP / Nexus (bundle ~5000 FCFA)** : apres paiement, le serveur emet un billet festival (student) **et** un billet Nexus ; deux e-mails / PDF selon le template (`festival` vs `nexus`).
+
+Pour le **pass etudiant** seul, `buyer.email` et `buyer.form` valide sont **obligatoires**. Les autres types de billets peuvent n'envoyer que `email` et `name`.
 
 `provider` vide = provider par defaut du serveur. Si un seul provider de paiement reel est actif (`manual` et `free` ne comptent pas), il est choisi automatiquement ; s'il y en a plusieurs (ex. `fedapay` + `stub`), le champ est obligatoire. Le montant n'est **jamais** fourni par le client : le serveur le calcule depuis les `ticket_type_id` et les quantites.
 
 ### GET `/api/events/{event_id}/orders` (admin)
 
-Chaque commande inclut un objet **`registration`** avec les reponses du formulaire : `first_name`, `last_name`, `email`, `school_name`, `motivation`, `wish`.
+Chaque commande inclut **`registration`** (champs legacy aplatis) et **`registration_form`** (objet JSON complet du wizard, si present).
 
 Reponse `201` :
 

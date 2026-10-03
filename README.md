@@ -38,6 +38,8 @@ Procédure complète (tests automatiques, parcours de paiement FedaPay sandbox, 
 
 Historique des changements : [CHANGELOG.md](./CHANGELOG.md).
 
+Admin organisateur (front) : [frontend-web/docs/ADMIN.md](./frontend-web/docs/ADMIN.md). Inscription reussie sans e-mail = verifier SMTP sur l'API (`email_configured` dans `/api/public/site-config`).
+
 ## Branches de travail
 
 - `feat/Backend` — évolutions backend (`backend/` à la racine)

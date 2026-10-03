@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from '@/components/theme-provider'
 import { getAdminRoute } from '@/lib/env'
+import { AdminLoadingScreen } from './admin/components/brand/AdminTdevLogo'
 
 const AdminApp = lazy(() => import('./admin/App.tsx'))
 
@@ -15,23 +16,17 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
           {adminRoute ? (
             <Route
               path={`${adminRoute}/*`}
               element={
-                <Suspense
-                  fallback={
-                    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-                      <div className="w-8 h-8 border-4 border-green-800 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  }
-                >
+                <Suspense fallback={<AdminLoadingScreen message="Chargement de l’admin…" />}>
                   <AdminApp />
                 </Suspense>
               }
             />
           ) : null}
+          <Route path="/" element={<App />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

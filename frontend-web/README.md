@@ -1,6 +1,6 @@
 # Billetterie TDEV Festival (frontend)
 
-Application React (Vite, TypeScript, Tailwind) dédiée à la **billetterie officielle** : catalogue des passes, inscription gratuite, paiement des passes payants, confirmation par e-mail.
+Application React (Vite, TypeScript, Tailwind) : **vitrine** TDEV Festival (passes, wizard d'inscription 8 étapes) et **dashboard admin** (données API, exports CSV/PDF, équipe).
 
 L'API est fournie par `backend-python/` (FastAPI). En développement, le proxy Vite relaye `/api` vers le backend.
 
@@ -59,13 +59,20 @@ Le code lit les variables via `src/lib/env.ts` (validation des chemins et URLs).
 | `lib/static-billetterie-catalog.ts` | Contenu landing (passes, prix affichés) sans API |
 | `lib/billetterie-storefront.ts` | API au checkout : événement + types de billets réels |
 | `lib/billetterie-checkout.ts` | Création commande + verify (gratuit) |
+| `components/registration/RegistrationWizard.tsx` | Formulaire PDF V1 (8 étapes, sessionStorage) |
+| `lib/registration-form.ts` | Schéma et libellés alignés sur `backend/orders/registration.py` |
+| `src/admin/` | Dashboard organisateur (API réelle, pas de mocks) |
+
+Documentation admin : [docs/ADMIN.md](./docs/ADMIN.md).
 
 ## Parcours utilisateur
 
-La **landing** et le **formulaire** fonctionnent sans backend (catalogue statique). L'**API** n'est appelée qu'à la soumission (« Valider l'inscription » / « Continuer vers le paiement »). Goodies : lien externe uniquement.
+La **landing** utilise un catalogue statique ; le **wizard** collecte le formulaire complet puis appelle l'API a la validation.
 
-1. **Pass Festival (gratuit)** : formulaire → API → `POST /api/orders` → verify → popup succès, billet par e-mail.
-2. **Pass Nexus Night (payant)** : formulaire → API → commande → redirection paiement si disponible → billet par e-mail.
+1. **Pass Festival (gratuit)** : wizard → `POST /api/orders` avec `buyer.form` → verify → popup succès. **E-mail** avec PDF seulement si SMTP configuré sur l'API (`email_configured` dans `/api/public/site-config`).
+2. **Pass Nexus Night (payant, bundle)** : wizard → commande FedaPay → après paiement, billets festival + Nexus ; e-mails selon templates Festival / Nexus.
+
+Logo vitrine et admin : `public/image.png` via `src/components/brand/tdev-brand-assets.ts`.
 
 ## Sécurité (résumé)
 

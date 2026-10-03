@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { AdminLoadingScreen } from '../components/brand/AdminTdevLogo';
 
 function parseHashTokens(): { token: string; refresh: string } | null {
   const raw = window.location.hash.replace(/^#/, '');
@@ -30,9 +31,5 @@ export const AuthCallbackPage: React.FC = () => {
     });
   }, [completeOAuthSession, navigate]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-      <p className="text-sm text-slate-600">{message}</p>
-    </div>
-  );
+  return <AdminLoadingScreen message={message} />;
 };

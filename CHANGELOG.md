@@ -2,6 +2,23 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Les changements sont regroupés par branche de travail tant qu'ils ne sont pas publiés dans une version.
 
+## [Non publié] — `main` (TDEV Festival 2026)
+
+### Ajouté
+
+- **Wizard d'inscription PDF V1** (8 etapes) : `RegistrationWizard`, validation alignee sur `backend/orders/registration.py`, envoi `buyer.form` au checkout.
+- **Colonne `registration_form`** (migration `0022`) et exports admin CSV/PDF complets.
+- **Bundle pass VIP 5000 FCFA** : emission billet festival + Nexus, e-mails templates Festival / Nexus (`ticket_email.py`).
+- **Dashboard admin** branche sur l'API (participants, commandes, recherche, fiche detail formulaire).
+- **Branding admin** : `AdminTdevLogo`, `AdminLoadingScreen`, `AdminAuthShell` ; assets `public/image.png`.
+- **Securite base prod** : verrou `CHANTIER3A_DATABASE_URL` sur disque Render, `healthz?db=1` avec `database_target`.
+- Doc : `frontend-web/docs/ADMIN.md`, mises a jour API-FRONTEND, RENDER, TESTING, CONFIGURATION.
+
+### Modifié
+
+- Route admin prod : `VITE_ADMIN_ROUTE=/gestion-dev-local-admin`, redirect Vercel.
+- Selecteurs wizard : Radix Select pour pays et listes longues.
+
 ## [Non publié] — `feat/paiement-integration`
 
 ### Ajouté

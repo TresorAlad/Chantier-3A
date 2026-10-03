@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Ticket, Sparkles, QrCode, Tags, X, Download, ShoppingCart, Calendar, UserCog } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { AdminTdevLogo } from '../brand/AdminTdevLogo';
 
 interface SidebarProps { isOpen: boolean; onClose: () => void }
 
@@ -24,7 +25,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     {isOpen && <div onClick={onClose} className="fixed inset-0 z-40 bg-green-950/30 lg:hidden" />}
     <aside className={cn('fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-green-900 bg-green-950 text-white transition-transform lg:translate-x-0', isOpen ? 'translate-x-0' : '-translate-x-full')}>
       <div className="flex h-20 items-center justify-between border-b border-green-800 px-6">
-        <div className="flex items-center gap-3"><img src="/image.png" alt="TDEV" className="h-9 w-9 brightness-0 invert" /><div><p className="font-bold">TDEV Festival</p><p className="text-[10px] uppercase tracking-widest text-green-200">Administration</p></div></div>
+        <AdminTdevLogo
+          variant="onDark"
+          size="md"
+          withTitle
+          subtitle="Administration"
+          className="min-w-0 flex-1"
+        />
         <button onClick={onClose} className="rounded-lg p-2 text-green-100 lg:hidden"><X className="h-5 w-5" /></button>
       </div>
       <nav className="flex-1 space-y-1 p-4">

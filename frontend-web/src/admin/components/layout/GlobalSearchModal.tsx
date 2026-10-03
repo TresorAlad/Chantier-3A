@@ -6,6 +6,7 @@ import { ordersService } from '../../services/orders.service';
 import { ticketsService } from '../../services/tickets.service';
 import { useEvent } from '../../context/EventContext';
 import { formatMoney } from '../../lib/utils';
+import { AdminTdevLogo } from '../brand/AdminTdevLogo';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -221,9 +222,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
           <div className="flex items-center gap-2">
             <span className="px-1.5 py-0.5 rounded border border-slate-200 bg-white shadow-sm font-medium">ESC</span> pour fermer
           </div>
-          <div>
-            TDEV Billetterie
-          </div>
+          <AdminTdevLogo variant="onLight" size="sm" />
         </div>
       </div>
     </div>

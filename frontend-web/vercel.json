@@ -9,7 +9,12 @@
       "destination": "https://chantier-3a.onrender.com/media/:path*"
     },
     {
-      "source": "/((?!api/|media/).*)",
+      "source": "/gestion-dev-local-admin",
+      "destination": "/gestion-dev-local-admin/login",
+      "statusCode": 307
+    },
+    {
+      "source": "/((?!api/|media/|assets/).*)",
       "destination": "/index.html"
     }
   ]

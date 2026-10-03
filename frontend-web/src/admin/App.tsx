@@ -21,6 +21,7 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 
 import { getAdminRoute } from '@/lib/env';
+import { AdminLoadingScreen, AdminTdevLogo } from './components/brand/AdminTdevLogo';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading, staffAccessDenied, verifyStaffAccess, logout } = useAuth();
@@ -34,11 +35,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }, [isAuthenticated, eventId, eventLoading, verifyStaffAccess]);
 
   if (isLoading || (isAuthenticated && eventLoading)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="w-8 h-8 border-4 border-green-800 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <AdminLoadingScreen />;
   }
 
   if (!isAuthenticated) {
@@ -48,6 +45,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (staffAccessDenied) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-[#F8FAFC]">
+        <AdminTdevLogo variant="onLight" size="lg" />
         <h1 className="text-xl font-bold text-slate-900">Accès refusé</h1>
         <p className="text-sm text-slate-600 text-center max-w-md">
           Votre compte n’a pas les droits administrateur sur cet événement.
