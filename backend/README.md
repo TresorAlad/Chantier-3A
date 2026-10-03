@@ -45,6 +45,7 @@ cp .env.example .env
 | `CHANTIER3A_DATA_DIR` | Recommandé | Répertoire local (session, médias ; défaut `./data`) |
 | `CHANTIER3A_KEY_PASSPHRASE` | Oui en prod | Passphrase du coffre de clés (signature billets) |
 | `CHANTIER3A_BASE_URL` | Recommandé | URL publique (`http://localhost:8080`) |
+| `CHECKIN_SNAPSHOT_SIGNING_KEY` | Oui avec le mobile | Graine Ed25519 dédiée à la signature des données hors ligne (`python -m checkin.signing`) |
 
 Variables optionnelles :
 
@@ -100,7 +101,7 @@ Migrations (postgresql): 13 version(s) at postgresql://...
   latest version: 13
 ```
 
-Les scripts SQL sont dans `migrations/` (numérotés `0001_`, …, jusqu’à **0013**). Les versions déjà appliquées sont suivies dans la table `schema_migrations`.
+Les scripts SQL sont dans `migrations/` (numérotés `0001_`, …, jusqu’à **0022**). Les versions déjà appliquées sont suivies dans la table `schema_migrations`.
 
 Relancer `billetterie-api migrate` est **idempotent** : seules les versions non encore appliquées sont exécutées.
 
