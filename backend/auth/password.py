@@ -7,8 +7,7 @@ import re
 from dataclasses import dataclass
 
 from argon2 import Type
-from argon2.exceptions import VerifyMismatchError
-from argon2.low_level import hash_secret_raw, verify_secret
+from argon2.low_level import hash_secret_raw
 
 _PHC_RE = re.compile(
     r"^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$"
@@ -64,20 +63,22 @@ def _decode_hash(encoded: str) -> tuple[_Params, bytes, bytes]:
 
 def verify_password(encoded_hash: str, password: str) -> bool:
     """Return whether ``password`` matches the encoded Argon2id hash."""
+    import hmac
+
     try:
         params, salt, expected = _decode_hash(encoded_hash)
     except ValueError:
         return False
     try:
-        verify_secret(
-            hash=expected,
+        digest = hash_secret_raw(
             secret=password.encode("utf-8"),
             salt=salt,
-            type=Type.ID,
             time_cost=params.time,
             memory_cost=params.memory,
             parallelism=params.threads,
+            hash_len=len(expected),
+            type=Type.ID,
         )
-        return True
-    except VerifyMismatchError:
+        return hmac.compare_digest(digest, expected)
+    except Exception:
         return False
