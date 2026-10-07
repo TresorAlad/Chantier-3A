@@ -5,7 +5,8 @@ import {
   Sparkles,
   ScanLine,
   Download,
-  RefreshCw,
+  Clock,
+  ShoppingBag,
 } from 'lucide-react';
 import { StatCard } from '../components/ui/StatCard';
 import { SalesAreaChart } from '../components/dashboard/SalesAreaChart';
@@ -21,7 +22,32 @@ import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
 import { useToast } from '../context/ToastContext';
 import { formatMoney } from '../lib/utils';
+import { adminTheme } from '../lib/admin-theme';
+import { cn } from '../lib/utils';
 import { DashboardKPIData, TicketType, Order } from '../types';
+
+function MiniInsightCard({
+  title,
+  value,
+  hint,
+  icon,
+}: {
+  title: string;
+  value: string | number;
+  hint: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className={cn(adminTheme.card, 'flex items-start gap-3 p-4')}>
+      <div className="rounded-xl bg-zinc-100 p-2 text-zinc-600">{icon}</div>
+      <div>
+        <p className="text-xs font-medium text-zinc-500">{title}</p>
+        <p className="text-xl font-semibold tabular-nums text-zinc-900">{value}</p>
+        <p className="mt-0.5 text-[11px] text-zinc-500">{hint}</p>
+      </div>
+    </div>
+  );
+}
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -52,7 +78,9 @@ export const DashboardPage: React.FC = () => {
         if (results[0].status === 'fulfilled') setSalesData(results[0].value);
         if (results[1].status === 'fulfilled') setDistribution(results[1].value);
         if (results[2].status === 'fulfilled') setAdmissions(results[2].value);
-        if (results[3].status === 'fulfilled') setTicketTypes(results[3].value.filter(tt => tt.product_kind !== 'goodie'));
+        if (results[3].status === 'fulfilled') {
+          setTicketTypes(results[3].value.filter((tt) => tt.product_kind !== 'goodie'));
+        }
         if (results[4].status === 'fulfilled') setOrders(results[4].value.data);
       } catch (err) {
         console.error('Error loading dashboard', err);
@@ -69,93 +97,90 @@ export const DashboardPage: React.FC = () => {
     try {
       await exportsService.downloadServerCsv('participants', eventId);
       success('Export terminé', 'Le fichier CSV des inscrits a été téléchargé.');
-    } catch { error('Export impossible', 'Les données n’ont pas pu être téléchargées.'); }
+    } catch {
+      error('Export impossible', 'Les données n’ont pas pu être téléchargées.');
+    }
   };
+
+  const firstName = user?.name ? user.name.split(' ')[0] : 'Admin';
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Bonjour, {user?.name ? user.name.split(' ')[0] : 'Admin'}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Suivez en temps réel les inscriptions, pass Nexus Night et scans.
+          <h1 className={adminTheme.pageTitle}>Bonjour, {firstName}</h1>
+          <p className={adminTheme.pageSubtitle}>
+            Suivez inscriptions, soirée Nexus et contrôles d’entrée
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-all shadow-sm"
-          >
-            <Download className="w-4 h-4 text-slate-500" />
-            <span>Exporter Rapport</span>
-          </button>
-
-        </div>
+        <button type="button" onClick={handleExport} className={adminTheme.btnSecondary}>
+          <Download className="h-4 w-4 text-zinc-500" />
+          Exporter le rapport
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
+          variant="hero"
+          className="xl:col-span-2"
           title="Participants"
-          value={loading ? '...' : (kpis?.participants_count || 0).toLocaleString('fr-FR')}
-          icon={<Users className="w-5 h-5 text-white" />}
-          iconBgColor="bg-green-800"
+          value={loading ? '…' : (kpis?.participants_count || 0).toLocaleString('fr-FR')}
+          icon={<Users className="h-5 w-5" />}
           loading={loading}
         />
-
         <StatCard
           title="Billets émis"
-          value={loading ? '...' : (kpis?.tickets_sold || 0).toLocaleString('fr-FR')}
-          icon={<Ticket className="w-5 h-5 text-white" />}
-          iconBgColor="bg-green-700"
+          value={loading ? '…' : (kpis?.tickets_sold || 0).toLocaleString('fr-FR')}
+          icon={<Ticket className="h-5 w-5" />}
           loading={loading}
         />
-
         <StatCard
           title="Nexus Night"
-          value={loading ? '...' : (kpis?.nexus_night_count || 0).toLocaleString('fr-FR')}
-          icon={<Sparkles className="w-5 h-5 text-white" />}
-          iconBgColor="bg-green-600"
+          value={loading ? '…' : (kpis?.nexus_night_count || 0).toLocaleString('fr-FR')}
+          icon={<Sparkles className="h-5 w-5" />}
+          comparison={
+            kpis ? formatMoney(kpis.nexus_night_revenue_minor, kpis.currency || 'XOF') : undefined
+          }
           trendLabel="Revenus"
-          comparison={kpis ? formatMoney(kpis.nexus_night_revenue_minor, kpis.currency || 'XOF') : '...'}
           loading={loading}
         />
-        
         <StatCard
-          title="Tickets scannés"
-          value={loading ? '...' : (kpis?.scans_total || 0).toLocaleString('fr-FR')}
-          icon={<ScanLine className="w-5 h-5 text-white" />}
-          iconBgColor="bg-green-800"
+          title="Scans"
+          value={loading ? '…' : (kpis?.scans_total || 0).toLocaleString('fr-FR')}
+          icon={<ScanLine className="h-5 w-5" />}
           loading={loading}
         />
-
         <StatCard
           title="En attente"
-          value={loading ? '...' : (kpis?.pending_orders_count || 0).toLocaleString('fr-FR')}
-          icon={<Users className="w-5 h-5 text-white" />}
-          iconBgColor="bg-green-500"
+          value={loading ? '…' : (kpis?.pending_orders_count || 0).toLocaleString('fr-FR')}
+          icon={<Clock className="h-5 w-5" />}
           loading={loading}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SalesAreaChart data={salesData} />
         </div>
-        <div>
+        <div className="flex flex-col gap-4">
           <TicketDonutChart data={distribution} total={kpis?.tickets_sold || 0} />
+          <MiniInsightCard
+            title="Commandes récentes"
+            value={loading ? '…' : orders.length}
+            hint="Derniers flux affichés ci-dessous"
+            icon={<ShoppingBag className="h-4 w-4" />}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <PassesProgressCard ticketTypes={ticketTypes} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <RecentOrdersTable orders={orders} />
         </div>
-        <div className="space-y-6">
+        <div>
           <AdmissionsBarChart data={admissions} />
-          <PassesProgressCard ticketTypes={ticketTypes} />
         </div>
       </div>
     </div>

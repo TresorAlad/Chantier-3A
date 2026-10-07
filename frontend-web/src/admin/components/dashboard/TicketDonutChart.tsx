@@ -1,5 +1,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { adminChartColors, adminTheme } from '../../lib/admin-theme';
+import { cn } from '../../lib/utils';
 
 interface TicketDonutChartProps {
   data: Array<{ name: string; value: number; color: string }>;
@@ -8,12 +10,12 @@ interface TicketDonutChartProps {
 
 export const TicketDonutChart: React.FC<TicketDonutChartProps> = ({ data, total }) => {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full">
+    <div className={cn(adminTheme.card, 'flex h-full flex-col p-5')}>
       <div className="mb-4">
-        <h3 className="text-base font-bold text-slate-900 tracking-tight">
+        <h3 className={adminTheme.cardTitle}>
           Répartition par Type de Pass
         </h3>
-        <p className="text-xs text-slate-400 mt-0.5">
+        <p className={adminTheme.cardSubtitle}>
           Ventilation des ventes sur l’ensemble du festival
         </p>
       </div>
@@ -26,10 +28,10 @@ export const TicketDonutChart: React.FC<TicketDonutChartProps> = ({ data, total 
               <Tooltip
                 formatter={(value: any, name: any) => [`${value} unités`, name]}
                 contentStyle={{
-                  backgroundColor: '#0F172A',
-                  color: '#FFFFFF',
-                  borderRadius: '12px',
-                  border: 'none',
+                  backgroundColor: adminChartColors.tooltipBg,
+                  color: '#fafafa',
+                  borderRadius: '10px',
+                  border: `1px solid ${adminChartColors.tooltipBorder}`,
                   fontSize: '12px',
                 }}
               />

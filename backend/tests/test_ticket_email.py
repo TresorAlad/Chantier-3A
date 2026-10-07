@@ -15,7 +15,7 @@ def test_build_festival_email_includes_goodies_shop():
         ),
         contact_url="https://festival.example/contact",
         variant="festival",
-        goodies_shop_url="https://shop.tdevfestival.com",
+        goodies_shop_url="https://shop.ourtdev.com",
     )
     subject, plain, html = build_ticket_email(ctx)
 
@@ -23,12 +23,12 @@ def test_build_festival_email_includes_goodies_shop():
     assert "Bonjour Awa" in plain
     assert "Pass Festival" in plain
     assert "Goodies et Welcome Pack" in plain
-    assert "shop.tdevfestival.com" in plain
+    assert "shop.ourtdev.com" in plain
     assert "QR code" in plain
 
     assert "Votre Pass Festival est confirmé" in html
     assert "Découvrir les goodies" in html
-    assert "shop.tdevfestival.com" in html
+    assert "shop.ourtdev.com" in html
     assert "Télécharger mon billet" in html
     assert "Contactez l'équipe T-Dev" in html
 
@@ -45,7 +45,7 @@ def test_build_nexus_email_bundle_and_goodies():
             TicketEmailLine(pass_label="Pass Festival", holder_name="Kofi Mensah", serial="FF-001"),
         ),
         variant="nexus",
-        goodies_shop_url="https://shop.tdevfestival.com",
+        goodies_shop_url="https://shop.ourtdev.com",
     )
     subject, plain, html = build_ticket_email(ctx)
 

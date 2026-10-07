@@ -1,21 +1,92 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Tags,
-  Plus,
-  TrendingUp,
-  Package,
-  Layers,
-} from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/FeedbackStates';
 import { ticketTypesService } from '../services/ticket-types.service';
 import { formatMoney } from '../lib/utils';
-import { TicketType } from '../types';
+import { formatCatalogTicketTypes, type TicketTypeDisplay } from '../lib/ticket-type-catalog-display';
 import { useEvent } from '../context/EventContext';
+import { adminTheme } from '../lib/admin-theme';
+import { cn } from '../lib/utils';
+import { WELCOME_PACK_SHOP_URL } from '@/lib/static-billetterie-catalog';
+import { ExternalLink } from 'lucide-react';
+
+function CatalogCard({ row }: { row: TicketTypeDisplay }) {
+  const { ticket, displayTitle, displayDescription, categoryLabel, gauge } = row;
+  const isGoodie = ticket.product_kind === 'goodie';
+
+  return (
+    <article className={cn(adminTheme.cardInteractive, 'flex flex-col justify-between p-5')}>
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-600">
+            {categoryLabel}
+          </span>
+          <span className="text-lg font-semibold tabular-nums text-zinc-900">
+            {formatMoney(ticket.price_minor, 'XOF')}
+          </span>
+        </div>
+
+        <h3 className="text-base font-semibold tracking-tight text-zinc-900">{displayTitle}</h3>
+        <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-500">{displayDescription}</p>
+      </div>
+
+      {isGoodie ? (
+        <div className="mt-6 border-t border-zinc-100 pt-4">
+          <a
+            href={WELCOME_PACK_SHOP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn('inline-flex items-center gap-1 text-xs', adminTheme.linkAccent)}
+          >
+            Ouvrir la boutique merch
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-3 border-t border-zinc-100 pt-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-zinc-500">Ventes</span>
+            <span className="font-semibold tabular-nums text-zinc-900">
+              {gauge.soldLabel}
+              {!gauge.unlimitedQuota && (
+                <span className="ml-1 font-normal text-zinc-500">({gauge.percentLabel})</span>
+              )}
+              {gauge.unlimitedQuota && (
+                <span className="ml-1 font-normal text-zinc-500">· {gauge.percentLabel}</span>
+              )}
+            </span>
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className={cn(
+                'h-full rounded-full bg-emerald-600 transition-all duration-500',
+                gauge.unlimitedQuota && 'bg-emerald-500/70',
+                gauge.barWidth >= 90 && !gauge.unlimitedQuota && 'bg-amber-600',
+              )}
+              style={{ width: `${gauge.barWidth}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1 text-xs text-zinc-500">
+            <span>
+              Places restantes :{' '}
+              <strong className="text-zinc-800">{gauge.remainingLabel}</strong>
+            </span>
+            <span>
+              Max. par commande :{' '}
+              <strong className="text-zinc-800">{ticket.max_per_order}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
 
 export const TicketTypesPage: React.FC = () => {
   const { eventId } = useEvent();
-  const [types, setTypes] = useState<TicketType[]>([]);
+  const [rows, setRows] = useState<TicketTypeDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,9 +95,10 @@ export const TicketTypesPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await ticketTypesService.getAll(eventId);
-      setTypes(data);
-    } catch (err: any) {
-      setError(err.message || 'Impossible de récupérer les types de billets.');
+      setRows(formatCatalogTicketTypes(data));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Impossible de charger les passes.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -39,76 +111,24 @@ export const TicketTypesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Catalogue des Types de Billets & Produits"
-        subtitle="Configurez les catégories de passes, tarifs, quotas et options"
+        title="Catalogue des passes"
+        subtitle="Pass Festival, Nexus Night et Welcome Pack tels que présentés aux visiteurs"
       />
 
       {loading ? (
         <TableSkeleton rows={4} />
       ) : error ? (
         <ErrorState message={error} onRetry={loadData} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="Aucun pass configuré"
+          description="Les offres du festival s’afficheront ici dès qu’elles seront disponibles."
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {types.map((tt) => {
-            const remaining = tt.quantity_total - tt.quantity_sold;
-            const percent = Math.min(
-              100,
-              Math.round((tt.quantity_sold / (tt.quantity_total || 1)) * 100)
-            );
-
-            return (
-              <div
-                key={tt.id}
-                className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-card-hover transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-violet-50 text-violet-700 border border-violet-100">
-                      {tt.product_kind} {tt.pass_tier ? `• ${tt.pass_tier}` : ''}
-                    </span>
-                    <span className="text-lg font-black text-slate-900">
-                      {formatMoney(tt.price_minor, 'XOF')}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                    {tt.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                    {tt.description || 'Aucune description saisie.'}
-                  </p>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-100 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400 font-medium">Jauge Ventes</span>
-                    <span className="font-extrabold text-slate-900">
-                      {tt.quantity_sold} / {tt.quantity_total} ({percent}%)
-                    </span>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        percent >= 90
-                          ? 'bg-rose-500'
-                          : percent >= 70
-                          ? 'bg-violet-600'
-                          : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                    <span>Restant : <strong className="text-slate-800">{remaining}</strong></span>
-                    <span>Max/commande : <strong className="text-slate-800">{tt.max_per_order}</strong></span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {rows.map((row) => (
+            <CatalogCard key={row.ticket.id} row={row} />
+          ))}
         </div>
       )}
     </div>

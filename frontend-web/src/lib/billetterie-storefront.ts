@@ -3,6 +3,7 @@ import type { FestivalEvent, TicketType } from '@/lib/api-types';
 import { getFestivalEventSlug } from '@/lib/env';
 import { formatMoney } from '@/lib/money';
 import { productKindOf, remainingFor, visibleTicketTypes } from '@/lib/ticket-utils';
+import { WELCOME_PACK_SHOP_URL } from '@/lib/static-billetterie-catalog';
 
 export interface BilletterieProduct {
     ticketType: TicketType;
@@ -63,7 +64,7 @@ function mapProduct(tt: TicketType, currency: string): BilletterieProduct {
             category: 'Goodies et merch',
             popular: false,
             badgeText: 'Édition limitée',
-            externalUrl: 'https://shop.tdevfestival.com',
+            externalUrl: WELCOME_PACK_SHOP_URL,
         };
     }
 

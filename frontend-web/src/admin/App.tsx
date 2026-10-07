@@ -21,6 +21,7 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 
 import { getAdminRoute } from '@/lib/env';
+import { STOREFRONT_THEME_CLASS } from '@/components/storefront/StorefrontTheme';
 import { AdminLoadingScreen, AdminTdevLogo } from './components/brand/AdminTdevLogo';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -44,16 +45,16 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (staffAccessDenied) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-[#F8FAFC]">
+      <div className="admin-app flex min-h-screen flex-col items-center justify-center gap-4 bg-[#ecefed] p-6">
         <AdminTdevLogo variant="onLight" size="lg" />
-        <h1 className="text-xl font-bold text-slate-900">Accès refusé</h1>
-        <p className="text-sm text-slate-600 text-center max-w-md">
+        <h1 className="text-xl font-semibold text-zinc-900">Accès refusé</h1>
+        <p className="max-w-md text-center text-sm text-zinc-600">
           Votre compte n’a pas les droits administrateur sur cet événement.
         </p>
         <button
           type="button"
           onClick={() => logout()}
-          className="rounded-xl bg-green-800 px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
         >
           Se déconnecter
         </button>
@@ -73,6 +74,9 @@ export const AdminApp: React.FC = () => {
       document.head.appendChild(meta);
     }
     meta.setAttribute('content', 'noindex, nofollow');
+
+    document.documentElement.classList.remove('dark', STOREFRONT_THEME_CLASS);
+    document.documentElement.classList.add('light');
   }, []);
 
   return (

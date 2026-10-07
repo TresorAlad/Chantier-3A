@@ -4,6 +4,8 @@ import { Order, OrderStatus } from '../../types';
 import { formatMoney, formatDateTime } from '../../lib/utils';
 import { StatusBadge } from '../ui/StatusBadge';
 import { Search, Eye, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { adminTheme } from '../../lib/admin-theme';
+import { cn } from '../../lib/utils';
 
 interface RecentOrdersTableProps {
   orders: Order[];
@@ -32,14 +34,11 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      {/* Table Header with Search & Filter */}
-      <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className={cn(adminTheme.card, 'overflow-hidden')}>
+      <div className="flex flex-col justify-between gap-4 border-b border-zinc-100 p-5 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-base font-bold text-slate-900 tracking-tight">
-            Commandes Récentes
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h3 className={adminTheme.cardTitle}>Liste des commandes</h3>
+          <p className={adminTheme.cardSubtitle}>
             Flux des dernières inscriptions et paiements en direct
           </p>
         </div>
@@ -55,7 +54,7 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-9 pr-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all w-40 sm:w-56"
+              className="w-40 rounded-xl border border-zinc-200 bg-zinc-50 py-1.5 pl-9 pr-3.5 text-xs font-medium text-zinc-800 placeholder-zinc-400 transition-all focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/15 sm:w-56"
             />
           </div>
 
@@ -65,7 +64,7 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
               setStatusFilter(e.target.value as any);
               setCurrentPage(1);
             }}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-all focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/15"
           >
             <option value="all">Tous les statuts</option>
             <option value="paid">Payé</option>
@@ -80,7 +79,7 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-zinc-100 bg-zinc-50/90 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
               <th className="py-3.5 px-6">Participant / Acheteur</th>
               <th className="py-3.5 px-6">École / Organisation</th>
               <th className="py-3.5 px-6">Montant</th>
@@ -105,11 +104,11 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
                 >
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold flex items-center justify-center text-xs shrink-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
                         {order.buyer_name ? order.buyer_name.charAt(0).toUpperCase() : 'U'}
                       </div>
                       <div>
-                        <span className="font-bold text-slate-900 block group-hover:text-violet-600 transition-colors">
+                        <span className="block font-semibold text-zinc-900 transition-colors group-hover:text-emerald-700">
                           {order.buyer_name || 'Anonyme'}
                         </span>
                         <span className="text-[11px] text-slate-400">{order.buyer_email}</span>
@@ -132,7 +131,7 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => navigate(`/orders/${order.id}`)}
-                        className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-emerald-700"
                         title="Voir le détail"
                       >
                         <Eye className="w-4 h-4" />
@@ -174,8 +173,8 @@ export const RecentOrdersTable: React.FC<RecentOrdersTableProps> = ({ orders }) 
               onClick={() => setCurrentPage(i + 1)}
               className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${
                 currentPage === i + 1
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-zinc-900 text-white shadow-sm'
+                  : 'text-zinc-600 hover:bg-zinc-100'
               }`}
             >
               {i + 1}

@@ -8,7 +8,7 @@ from typing import Literal
 
 TicketEmailVariant = Literal["festival", "nexus"]
 
-DEFAULT_GOODIES_SHOP_URL = "https://shop.tdevfestival.com"
+DEFAULT_GOODIES_SHOP_URL = "https://shop.ourtdev.com"
 
 
 @dataclass(frozen=True)

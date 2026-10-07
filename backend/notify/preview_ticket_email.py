@@ -31,7 +31,7 @@ def sample_context() -> TicketEmailContext:
         ),
         contact_url="https://festival.ourtdev.com/contact",
         variant="festival",
-        goodies_shop_url="https://shop.tdevfestival.com",
+        goodies_shop_url="https://shop.ourtdev.com",
     )
 
 
@@ -57,7 +57,7 @@ def sample_nexus_context() -> TicketEmailContext:
         ),
         contact_url="https://festival.ourtdev.com/contact",
         variant="nexus",
-        goodies_shop_url="https://shop.tdevfestival.com",
+        goodies_shop_url="https://shop.ourtdev.com",
     )
 
 

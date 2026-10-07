@@ -27,6 +27,9 @@ export interface BilletterieListingProduct {
 export const STATIC_FESTIVAL_TITLE = 'TDEV Festival 2026';
 export const STATIC_VENUE_LABEL = 'Lieu principal du festival';
 
+/** Boutique officielle Welcome Pack / merch (vitrine + admin). */
+export const WELCOME_PACK_SHOP_URL = 'https://shop.ourtdev.com';
+
 const PASS_FESTIVAL_INCLUSIONS = [
     'Conférences tech et innovation',
     'Expositions et stands',
@@ -89,7 +92,7 @@ export function getStaticBilletterieListing(): BilletterieListingProduct[] {
             category: 'Goodies et merch',
             popular: false,
             badgeText: 'Édition limitée',
-            externalUrl: 'https://shop.tdevfestival.com',
+            externalUrl: WELCOME_PACK_SHOP_URL,
             cardAccent: 'neutral',
         },
     ];
@@ -97,9 +100,9 @@ export function getStaticBilletterieListing(): BilletterieListingProduct[] {
 
 const CARD_ACCENT_CLASS: Record<BilletterieCardAccent, string> = {
     festival:
-        'border-2 border-emerald-500/50 shadow-glow-primary bg-gradient-to-b from-emerald-500/10 to-card/90',
-    nexus: 'border-2 border-amber-600/60 bg-gradient-to-b from-[#3a2618]/90 via-[#2a1a12]/40 to-card/95 shadow-[0_0_40px_-8px_rgba(245,158,11,0.35)]',
-    neutral: 'border-border/60 bg-card/60 hover:border-primary/40',
+        'border-2 border-primary/35 shadow-elevated bg-gradient-to-b from-primary/12 via-white to-white',
+    nexus: 'border-2 border-amber-500/45 bg-gradient-to-b from-amber-100/80 via-white to-white shadow-[0_8px_28px_-10px_rgba(245,158,11,0.35)]',
+    neutral: 'border-border/70 bg-white/90 hover:border-primary/35 shadow-soft',
 };
 
 export function billetterieCardClass(ticket: BilletterieListingProduct): string {
@@ -111,10 +114,10 @@ export function billetterieCardClass(ticket: BilletterieListingProduct): string 
 
 export function billetteriePriceClass(ticket: BilletterieListingProduct): string {
     if (ticket.cardAccent === 'nexus' || ticket.checkoutTier === 'vip') {
-        return 'text-amber-400 dark:text-amber-300';
+        return 'text-amber-700';
     }
     if (ticket.isFree) {
-        return 'text-emerald-500 dark:text-emerald-400';
+        return 'text-primary-emphasis';
     }
     return 'text-foreground';
 }
@@ -126,7 +129,7 @@ export function billetterieCtaVariant(ticket: BilletterieListingProduct): 'defau
 
 export function billetterieCtaClass(ticket: BilletterieListingProduct): string {
     if (ticket.cardAccent === 'nexus' || ticket.checkoutTier === 'vip') {
-        return 'w-full font-bold h-11 bg-amber-600 hover:bg-amber-500 text-white border-0 shadow-md';
+        return 'w-full font-bold h-11 bg-amber-600 hover:bg-amber-700 text-white border-0 shadow-md';
     }
     return `w-full font-bold h-11 ${ticket.popular ? 'shadow-glow-primary' : ''}`;
 }

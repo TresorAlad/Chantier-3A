@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Loader2, Calendar, MapPin, Moon, Sun, Check, Gift } from 'lucide-react';
+import { Loader2, Calendar, MapPin, Check, Gift } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useTheme } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,8 +40,6 @@ const isSafeRedirect = (url: string) => {
 
 export default function App() {
     const products = useMemo(() => getStaticBilletterieListing(), []);
-    const { theme, setTheme } = useTheme();
-
     const [registerOpen, setRegisterOpen] = useState(false);
     const [activeListing, setActiveListing] = useState<BilletterieListingProduct | null>(null);
     /** Remonte le wizard à chaque ouverture pour repartir du brouillon de session. */
@@ -176,7 +173,7 @@ export default function App() {
                     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                         <img
                             src={TDEV_LOGO_URL}
-                            className="h-8 w-auto shrink-0 dark:invert transition-all sm:h-9"
+                            className="h-8 w-auto shrink-0 transition-all sm:h-9"
                             alt="TDEV Festival"
                         />
                         <div className="hidden min-w-0 flex-col sm:flex">
@@ -189,15 +186,6 @@ export default function App() {
                         </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground sm:h-10 sm:w-10"
-                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                            aria-label="Changer le thème"
-                        >
-                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                        </Button>
                         <Button size="sm" className="h-9 shrink-0 px-2.5 text-xs shadow-glow-primary sm:h-9 sm:px-3 sm:text-sm" asChild>
                             <a href="#passes">
                                 <span className="sm:hidden">Réserver</span>
@@ -254,13 +242,7 @@ export default function App() {
                                 )}
 
                                 <div className="relative h-44 overflow-hidden bg-muted/50">
-                                    <div
-                                        className={`absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent ${
-                                            ticket.cardAccent === 'nexus'
-                                                ? 'from-[#3a2618]/80 via-amber-950/30'
-                                                : ''
-                                        }`}
-                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-white via-white/50 to-transparent" />
                                     <div className="absolute bottom-4 left-6 right-6">
                                         <span className="text-xs uppercase tracking-wider text-primary font-bold">
                                             {ticket.category}
@@ -401,7 +383,7 @@ export default function App() {
             <footer className="border-t border-border/40 py-8 bg-muted/30 text-center text-sm text-muted-foreground">
                 <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
-                        <img src={TDEV_LOGO_URL} className="h-6 w-auto dark:invert" alt="T-Dev Logo" />
+                        <img src={TDEV_LOGO_URL} className="h-6 w-auto" alt="T-Dev Logo" />
                         <span>© 2026 TDEV Festival. Tous droits réservés.</span>
                     </div>
                 </div>

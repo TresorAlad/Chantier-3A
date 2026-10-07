@@ -4,26 +4,64 @@
 
 @layer base {
   body {
-    @apply antialiased text-green-950 bg-[#f7fcf8];
+    @apply antialiased text-zinc-900;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-/* Custom scrollbars for clean SaaS UI */
-::-webkit-scrollbar {
+.admin-app {
+  --admin-canvas: #f4f5f7;
+  --admin-accent: #059669;
+  background-color: var(--admin-canvas);
+}
+
+/* Scrollbars zone principale (pas la sidebar) */
+.admin-main-shell::-webkit-scrollbar,
+.admin-main-shell *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+.admin-main-shell::-webkit-scrollbar-track,
+.admin-main-shell *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #86b995;
+.admin-main-shell::-webkit-scrollbar-thumb,
+.admin-main-shell *::-webkit-scrollbar-thumb {
+  background: #d1d5db;
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #287a43;
+.admin-main-shell::-webkit-scrollbar-thumb:hover,
+.admin-main-shell *::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Rail latéral : aucune barre ni boutons de défilement */
+.admin-sidebar-rail,
+.admin-sidebar-rail nav {
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.admin-sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.admin-sidebar-rail::-webkit-scrollbar,
+.admin-sidebar-rail nav::-webkit-scrollbar,
+.admin-sidebar-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.admin-sidebar-rail::-webkit-scrollbar-button,
+.admin-sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }

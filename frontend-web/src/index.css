@@ -129,6 +129,42 @@
     --scrollbar-thumb-hover: 221 97% 54%;
   }
 
+  /* Formulaire partenaire : rose très clair + blanc, thème unique (pas de mode sombre). */
+  :root.inscription-theme {
+    --background: 350 48% 97%;
+    --foreground: 340 22% 16%;
+
+    --muted: 350 35% 94%;
+    --muted-foreground: 340 12% 42%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 340 22% 16%;
+
+    --border: 350 28% 88%;
+    --input: 340 15% 55%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 340 22% 16%;
+
+    --primary: 340 58% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-emphasis: 340 62% 42%;
+
+    --secondary: 350 40% 95%;
+    --secondary-foreground: 340 22% 18%;
+
+    --accent: 350 55% 94%;
+    --accent-foreground: 340 50% 36%;
+
+    --ring: 340 58% 48%;
+
+    --shadow-soft: 0 1px 2px 0 hsl(340 30% 40% / 0.05), 0 1px 3px 0 hsl(340 30% 40% / 0.07);
+    --shadow-elevated: 0 2px 4px -2px hsl(340 30% 40% / 0.08), 0 8px 20px -6px hsl(340 30% 40% / 0.1);
+
+    --scrollbar-thumb: 350 25% 78%;
+    --scrollbar-thumb-hover: 340 58% 52%;
+  }
+
   .dark {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
