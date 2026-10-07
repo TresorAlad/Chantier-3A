@@ -24,7 +24,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/tresoralad/chantier-3a
+  IMAGE_PREFIX: ghcr.io/tdevcommunity/chantier-3a
 
 jobs:
   build:
@@ -41,12 +41,12 @@ jobs:
             dockerfile: frontend-web/Dockerfile
             target: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Connexion a GHCR
+      - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build et push de l'image
+      - name: Build and push image
         run: |
           docker buildx create --use --driver docker-container >/dev/null
           docker buildx build -f ${{ matrix.dockerfile }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }} \
@@ -59,13 +59,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Declencher le deploiement sur le VPS
+      - name: Trigger deployment on the VPS
         run: |
           set -euo pipefail
           token=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://admin-deploy.ourtdev.com" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://admin-hub.ourtdev.com" | jq -r .value)
           echo "::add-mask::$token"
           status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 \
-            -X POST -H "Authorization: Bearer $token" https://admin-deploy.ourtdev.com/deploy)
+            -X POST -H "Authorization: Bearer $token" https://admin-hub.ourtdev.com/deploy)
           cat response.json; echo
           test "$status" = "200"
