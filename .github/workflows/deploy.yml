@@ -43,25 +43,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Connexion a GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:main
-            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:sha-${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Build et push de l'image
+        run: |
+          docker buildx create --use --driver docker-container >/dev/null
+          docker buildx build -f ${{ matrix.dockerfile }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }} \
+            --cache-from type=registry,ref=${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:buildcache \
+            --cache-to type=registry,ref=${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:buildcache,mode=max \
+            -t ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:main -t ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:sha-${{ github.sha }} \
+            --push ${{ matrix.context }}
 
   deploy:
     needs: build
@@ -71,9 +63,9 @@ jobs:
         run: |
           set -euo pipefail
           token=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://deploy.ourtdev.com" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://admin-deploy.ourtdev.com" | jq -r .value)
           echo "::add-mask::$token"
           status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 \
-            -X POST -H "Authorization: Bearer $token" https://deploy.ourtdev.com/deploy)
+            -X POST -H "Authorization: Bearer $token" https://admin-deploy.ourtdev.com/deploy)
           cat response.json; echo
           test "$status" = "200"
