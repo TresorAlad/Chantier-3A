@@ -1,0 +1,79 @@
+# Deploiement continu sur le VPS (festival.ourtdev.com) a chaque push sur main.
+#
+# Aucun secret GitHub n'est necessaire :
+#  - les images sont poussees sur GHCR avec le GITHUB_TOKEN fourni par Actions ;
+#  - le VPS est declenche avec un jeton OIDC signe par GitHub, que le service
+#    de deploiement verifie (depot, branche main). Les secrets applicatifs
+#    restent sur le VPS.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/tresoralad/chantier-3a
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: backend
+            dockerfile: backend/Dockerfile
+            target: runtime
+          - name: web
+            context: frontend-web
+            dockerfile: frontend-web/Dockerfile
+            target: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:main
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Declencher le deploiement sur le VPS
+        run: |
+          set -euo pipefail
+          token=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://deploy.ourtdev.com" | jq -r .value)
+          echo "::add-mask::$token"
+          status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 \
+            -X POST -H "Authorization: Bearer $token" https://deploy.ourtdev.com/deploy)
+          cat response.json; echo
+          test "$status" = "200"

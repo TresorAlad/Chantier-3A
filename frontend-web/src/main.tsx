@@ -27,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
             />
           ) : null}
           <Route path="/" element={<App />} />
+          <Route path="/billetterie" element={<App />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

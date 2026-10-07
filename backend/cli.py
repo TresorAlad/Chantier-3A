@@ -82,7 +82,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     except Exception as err:
         print(f"billetterie-api migrate failed: {err}", file=sys.stderr)
         return 1
-    print(f"Migrations (postgresql): {len(versions)} version(s) at {url}")
+    print(f"Migrations (postgresql): {len(versions)} version(s) at {database_target_label(url)}")
     if versions:
         print(f"  latest version: {versions[-1]}")
     return 0
