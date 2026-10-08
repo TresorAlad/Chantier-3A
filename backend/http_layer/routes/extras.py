@@ -103,15 +103,31 @@ def event_payouts(event_id: str, state: AppState = Depends(require_user)):
 
 @router.patch("/orgs/{org_id}/members/{user_id}")
 def patch_member(org_id: str, user_id: str, body: dict, state: AppState = Depends(require_user)):
-    """Patch member."""
-    if not rbac.can_manage_org(state.store, state.current_user.id, org_id, rbac.ROLE_OWNER):
-        return json_error(403, "forbidden", "you are not the owner of this org")
-    role = (body.get("role") or "").strip()
-    if role not in ("owner", "admin", "scanner"):
+    """Patch member role (admin+); rank rules match org invites."""
+    actor_id = state.current_user.id
+    if not rbac.can_manage_org(state.store, actor_id, org_id, rbac.ROLE_ADMIN):
+        return json_error(403, "forbidden", "you are not an admin/owner of this org")
+    new_role = (body.get("role") or "").strip()
+    if new_role not in ("owner", "admin", "scanner"):
         return json_error(400, "invalid_request", "invalid role")
+    try:
+        actor_role = orgs_repo.get_org_member_role(state.store, org_id, actor_id)
+        target_role = orgs_repo.get_org_member_role(state.store, org_id, user_id)
+    except NotFoundError:
+        return json_error(404, "not_found", "member not found")
+    if rbac._RANK.get(target_role, 0) > rbac._RANK.get(actor_role, 0):
+        return json_error(403, "forbidden", "you cannot modify a member with a higher role than yours")
+    if rbac._RANK.get(new_role, 0) > rbac._RANK.get(actor_role, 0):
+        return json_error(403, "forbidden", "you cannot assign a role higher than your own")
+    if new_role == rbac.ROLE_OWNER and actor_role != rbac.ROLE_OWNER:
+        return json_error(403, "forbidden", "only an owner can assign the owner role")
+    if target_role == rbac.ROLE_OWNER and new_role != rbac.ROLE_OWNER:
+        owners = [m for m in orgs_repo.list_org_members(state.store, org_id) if m.role == rbac.ROLE_OWNER]
+        if len(owners) <= 1 and owners[0].user_id == user_id:
+            return json_error(409, "conflict", "cannot remove the last owner from the organization")
     state.store.execute(
         "UPDATE org_members SET role = ? WHERE org_id = ? AND user_id = ?",
-        (role, org_id, user_id),
+        (new_role, org_id, user_id),
     )
     return {"ok": True}
 

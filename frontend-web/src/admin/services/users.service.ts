@@ -39,7 +39,7 @@ export const usersService = {
     orgId: string,
     email: string,
     role: 'admin' | 'scanner' | 'owner',
-  ): Promise<{ token: string; expires_at: string; invite_id?: string }> {
+  ): Promise<{ token: string; expires_at: string; invite_id?: string; email_sent?: boolean }> {
     return apiFetch(`/orgs/${orgId}/invites`, {
       method: 'POST',
       body: JSON.stringify({ email, role }),

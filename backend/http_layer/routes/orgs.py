@@ -155,8 +155,32 @@ def create_invite(org_id: str, body: dict, state: AppState = Depends(require_use
         created_at=now,
     )
     orgs_repo.create_org_invite(state.store, inv)
+    try:
+        org = orgs_repo.get_org_by_id(state.store, org_id)
+        org_name = org.name
+    except NotFoundError:
+        org_name = "TDEV Festival"
+    admin_base = (state.config.admin_url or state.config.base_url or "").strip().rstrip("/")
+    accept_url = f"{admin_base}/accept-invite?token={token}" if admin_base else f"/accept-invite?token={token}"
+    from notify.invite_email import send_org_invite_email
+
+    email_sent = send_org_invite_email(
+        state.config,
+        to_email=email,
+        org_name=org_name,
+        role=role,
+        accept_url=accept_url,
+        expires_days=INVITE_TTL.days,
+    )
     return Response(
-        content=_json({"invite_id": inv.id, "token": token, "expires_at": time_to_text(inv.expires_at)}),
+        content=_json(
+            {
+                "invite_id": inv.id,
+                "token": token,
+                "expires_at": time_to_text(inv.expires_at),
+                "email_sent": email_sent,
+            }
+        ),
         media_type="application/json",
         status_code=201,
     )

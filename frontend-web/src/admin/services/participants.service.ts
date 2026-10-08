@@ -28,10 +28,19 @@ function isNexusName(name: string): boolean {
 
 function parseRegistration(order: Record<string, unknown>): OrderRegistrationApi {
   const reg = (order.registration as OrderRegistrationApi) || {};
-  const form =
+  let form =
     reg.form && typeof reg.form === 'object' && !Array.isArray(reg.form)
       ? (reg.form as Record<string, unknown>)
       : {};
+  const topLevel = order.registration_form;
+  if (
+    Object.keys(form).length === 0 &&
+    topLevel &&
+    typeof topLevel === 'object' &&
+    !Array.isArray(topLevel)
+  ) {
+    form = topLevel as Record<string, unknown>;
+  }
   return { ...reg, form };
 }
 

@@ -12,6 +12,8 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/FeedbackStates';
 import { participantsService } from '../services/participants.service';
 import { exportsService } from '../services/exports.service';
+import { ExportEmptyError } from '../lib/export';
+import { adminMessages, adminUserMessage } from '../lib/admin-user-message';
 import { useToast } from '../context/ToastContext';
 import { useEvent } from '../context/EventContext';
 import { Participant } from '../types';
@@ -64,9 +66,17 @@ export const ParticipantsPage: React.FC = () => {
   const handleExportCsv = async () => {
     try {
       await exportsService.exportParticipants(eventId);
-      success('Export CSV réussi', 'Le fichier contient tous les champs du formulaire d\'inscription.');
-    } catch {
-      toastError('Export impossible', 'Réessayez dans un instant.');
+      success('Export CSV réussi', adminMessages.exportSuccess);
+    } catch (err) {
+      if (err instanceof ExportEmptyError) {
+        toastError('Export', adminMessages.exportNone);
+        return;
+      }
+      const msg =
+        err instanceof Error && err.message === 'empty_export'
+          ? adminMessages.exportNone
+          : adminUserMessage(err, adminMessages.exportFailed);
+      toastError('Export', msg);
     }
   };
 
@@ -75,8 +85,8 @@ export const ParticipantsPage: React.FC = () => {
     try {
       await exportsService.exportParticipantsPdf(eventId);
       success('Export PDF réussi', 'Chaque inscription est détaillée dans le document.');
-    } catch {
-      toastError('Export PDF impossible', 'Réessayez dans un instant.');
+    } catch (err) {
+      toastError('Export PDF', adminUserMessage(err, adminMessages.exportFailed));
     } finally {
       setExportingPdf(false);
     }

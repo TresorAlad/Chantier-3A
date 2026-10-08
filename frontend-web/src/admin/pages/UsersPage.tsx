@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserPlus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, ErrorState, TableSkeleton } from '../components/ui/FeedbackStates';
 import { usersService } from '../services/users.service';
 import { useEvent } from '../context/EventContext';
 import { useToast } from '../context/ToastContext';
-import { OrganizationMember } from '../types';
+import { OrganizationMember, OrgRole } from '../types';
 import { getAdminRoute } from '@/lib/env';
+import { adminMessages, adminUserMessage } from '../lib/admin-user-message';
+import { useAuth } from '../context/AuthContext';
+
+const ROLE_RANK: Record<OrgRole, number> = {
+  scanner: 1,
+  admin: 2,
+  owner: 3,
+};
 
 export const UsersPage: React.FC = () => {
   const { orgId } = useEvent();
+  const { user } = useAuth();
   const { success, error: toastError } = useToast();
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [invites, setInvites] = useState<
@@ -19,6 +28,12 @@ export const UsersPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'scanner'>('scanner');
+
+  const myRole = useMemo((): OrgRole | null => {
+    if (!user?.id) return null;
+    const me = members.find((m) => m.user_id === user.id);
+    return me?.role ?? null;
+  }, [members, user?.id]);
 
   const loadData = async () => {
     if (!orgId) return;
@@ -32,7 +47,7 @@ export const UsersPage: React.FC = () => {
       setMembers(m);
       setInvites(i);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Impossible de récupérer l’équipe.');
+      setError(adminUserMessage(err, adminMessages.loadTeamFailed));
     } finally {
       setLoading(false);
     }
@@ -49,11 +64,15 @@ export const UsersPage: React.FC = () => {
       const adminRoute = getAdminRoute() || '';
       const link = `${window.location.origin}${adminRoute}/accept-invite?token=${encodeURIComponent(res.token)}`;
       await navigator.clipboard.writeText(link);
-      success('Invitation créée', 'Lien copié dans le presse-papiers.');
+      if (res.email_sent) {
+        success('Invitation', adminMessages.inviteCreatedEmail(inviteEmail.trim()));
+      } else {
+        success('Invitation', adminMessages.inviteCreatedClipboard);
+      }
       setInviteEmail('');
       loadData();
     } catch (err: unknown) {
-      toastError('Invitation', err instanceof Error ? err.message : 'Création impossible.');
+      toastError('Invitation', adminUserMessage(err, adminMessages.inviteFailed));
     }
   };
 
@@ -62,8 +81,8 @@ export const UsersPage: React.FC = () => {
       await usersService.revokeInvite(inviteId);
       success('Invitation révoquée', '');
       loadData();
-    } catch {
-      toastError('Révocation', 'Action impossible.');
+    } catch (err: unknown) {
+      toastError('Révocation', adminUserMessage(err, adminMessages.genericRetry));
     }
   };
 
@@ -73,13 +92,32 @@ export const UsersPage: React.FC = () => {
       await usersService.updateMemberRole(orgId, userId, role);
       success('Rôle mis à jour', '');
       loadData();
-    } catch {
-      toastError('Rôle', 'Modification impossible.');
+    } catch (err: unknown) {
+      toastError('Rôle', adminUserMessage(err, adminMessages.roleChangeDenied));
     }
   };
 
+  const canEditMember = (member: OrganizationMember): boolean => {
+    if (!myRole) return false;
+    if (member.user_id === user?.id) return false;
+    if (member.role === 'owner' && myRole !== 'owner') return false;
+    return ROLE_RANK[member.role] <= ROLE_RANK[myRole];
+  };
+
+  const roleOptionsFor = (member: OrganizationMember): OrgRole[] => {
+    if (!myRole) return [];
+    const opts: OrgRole[] = ['scanner', 'admin'];
+    if (myRole === 'owner' && member.role === 'owner') {
+      return ['owner'];
+    }
+    if (myRole === 'owner') {
+      opts.push('owner');
+    }
+    return opts;
+  };
+
   if (!orgId) {
-    return <ErrorState message="Organisation introuvable." onRetry={loadData} />;
+    return <ErrorState message={adminMessages.loadTeamFailed} onRetry={loadData} />;
   }
 
   return (
@@ -139,15 +177,21 @@ export const UsersPage: React.FC = () => {
                     <td className="py-3 px-6 font-semibold">{m.user?.name}</td>
                     <td className="py-3 px-6">{m.user?.email}</td>
                     <td className="py-3 px-6">
-                      <select
-                        value={m.role}
-                        onChange={(e) => changeRole(m.user_id, e.target.value)}
-                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold"
-                      >
-                        <option value="owner">Owner</option>
-                        <option value="admin">Admin</option>
-                        <option value="scanner">Scanner</option>
-                      </select>
+                      {canEditMember(m) ? (
+                        <select
+                          value={m.role}
+                          onChange={(e) => changeRole(m.user_id, e.target.value)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold"
+                        >
+                          {roleOptionsFor(m).map((r) => (
+                            <option key={r} value={r}>
+                              {r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : 'Scanner'}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="font-semibold capitalize text-slate-700">{m.role}</span>
+                      )}
                     </td>
                   </tr>
                 ))}

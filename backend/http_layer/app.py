@@ -24,6 +24,7 @@ from http_layer.routes import (
     events,
     events_admin,
     extras,
+    exports,
     media,
     meta,
     oauth,
@@ -115,6 +116,7 @@ def create_app(
     api.include_router(tickets.router)
     api.include_router(scan.router)
     api.include_router(checkin_routes.router)
+    api.include_router(exports.router)
     api.include_router(extras.router)
     api.include_router(extras.images_router)
     app.add_middleware(ScanRateLimitMiddleware)

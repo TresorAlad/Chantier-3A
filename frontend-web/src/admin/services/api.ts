@@ -134,11 +134,20 @@ class ApiClient {
 
   async download(endpoint: string, filename: string): Promise<void> {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const response = await fetch(`${API_URL}${cleanEndpoint}`, {
-      headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${cleanEndpoint}`, {
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
+      });
+    } catch (err) {
+      logAdminApiDiagnostic('download', err);
+      throw new Error('network');
+    }
+    if (response.status === 404) {
+      throw new Error('empty_export');
+    }
     if (!response.ok) {
-      throw new Error('Téléchargement impossible.');
+      throw new Error('download_failed');
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);

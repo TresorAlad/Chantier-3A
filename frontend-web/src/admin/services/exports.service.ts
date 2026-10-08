@@ -1,7 +1,9 @@
-import { exportToCsv } from '../lib/export';
+import { ExportEmptyError, exportToCsv } from '../lib/export';
 import { downloadParticipantsRegistrationPdf } from '../lib/registration-export-pdf';
 import { REGISTRATION_CSV_HEADERS, registrationRowForCsv } from '@/lib/registration-form';
 import { participantsService } from './participants.service';
+import { apiClient } from './api';
+import { requireEventId } from '../context/EventContext';
 import { ordersService } from './orders.service';
 import { ticketsService } from './tickets.service';
 import { admissionsService } from './admissions.service';
@@ -12,21 +14,11 @@ const CSV_COLUMN_ORDER = Object.keys(REGISTRATION_CSV_HEADERS);
 
 export const exportsService = {
   async exportParticipants(eventId: string | null) {
-    const { data } = await participantsService.getAll({ limit: 100000 }, eventId);
-    const rows = data.map((p) =>
-      registrationRowForCsv({
-        form: p.registration_form,
-        passLabel: p.pass_name,
-        serials: p.serial,
-        orderStatus: p.order_status,
-        fallbackName: p.name,
-        fallbackEmail: p.email,
-      }),
+    const id = requireEventId(eventId ?? null);
+    await apiClient.download(
+      `/events/${id}/exports/participants.csv`,
+      'tdev_inscriptions_complet.csv',
     );
-    exportToCsv('tdev_inscriptions_complet', rows, {
-      columnOrder: CSV_COLUMN_ORDER,
-      headers: REGISTRATION_CSV_HEADERS,
-    });
   },
 
   async exportParticipantsPdf(eventId: string | null) {

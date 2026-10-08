@@ -1,11 +1,16 @@
+export class ExportEmptyError extends Error {
+  constructor() {
+    super('empty');
+  }
+}
+
 export function exportToCsv(
   filename: string,
   rows: Record<string, any>[],
   options?: { columnOrder?: string[]; headers?: Record<string, string> },
 ): void {
   if (!rows || !rows.length) {
-    alert("Aucune donnée à exporter.");
-    return;
+    throw new ExportEmptyError();
   }
 
   const keys = options?.columnOrder?.length
