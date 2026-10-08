@@ -8,10 +8,13 @@ import { StorefrontTheme } from '@/components/storefront/StorefrontTheme'
 import { ThemeProvider } from '@/components/theme-provider'
 import { getAdminRoute } from '@/lib/env'
 import { AdminLoadingScreen } from './admin/components/brand/AdminTdevLogo'
+import { startAutoUpdate } from '@/lib/auto-update'
 
 const AdminApp = lazy(() => import('./admin/App.tsx'))
 
 const adminRoute = getAdminRoute();
+
+startAutoUpdate();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
