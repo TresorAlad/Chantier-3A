@@ -22,7 +22,7 @@ import {
 } from '@/lib/inscription-entry';
 import { checkoutFailureCopy, logCheckoutDiagnostic } from '@/lib/user-facing-checkout-error';
 import { downloadGuestTicketPdfForOrder } from '@/lib/download-guest-ticket-pdf';
-import { TDEV_LOGO_URL } from '@/components/brand/tdev-brand-assets';
+import { StorefrontBrandHomeLink } from '@/components/storefront/StorefrontBrandHomeLink';
 import type { BilletterieListingProduct } from '@/lib/static-billetterie-catalog';
 
 const isSafeRedirect = (url: string) => {
@@ -178,7 +178,7 @@ export default function InscriptionPage() {
       {!embed && (
         <header className="border-b border-border/40 bg-background/90 px-4 py-3">
           <div className="container flex items-center gap-3">
-            <img src={TDEV_LOGO_URL} alt="TDEV Festival" className="h-8 w-auto" />
+            <StorefrontBrandHomeLink />
             <div>
               <p className="text-sm font-semibold">{listing.title}</p>
               <p className="text-xs text-muted-foreground">Inscription officielle TDEV Festival</p>
@@ -188,6 +188,11 @@ export default function InscriptionPage() {
       )}
 
       <main className={embed ? 'p-3 sm:p-4' : 'container max-w-2xl py-8 px-4'}>
+        {embed && (
+          <div className="mb-3">
+            <StorefrontBrandHomeLink embed imageClassName="h-7" />
+          </div>
+        )}
         <div className="mb-4">
           <h1 className="text-xl font-display font-bold tracking-tight">{listing.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">

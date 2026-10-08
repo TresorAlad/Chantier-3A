@@ -165,6 +165,12 @@
     --scrollbar-thumb-hover: 340 58% 52%;
   }
 
+  /* Wordmark PNG (vert + noir) → rose thème vitrine / inscription */
+  .storefront-wordmark-rose {
+    filter: brightness(0) saturate(100%) invert(48%) sepia(38%) saturate(900%) hue-rotate(305deg)
+      brightness(98%) contrast(94%);
+  }
+
   .dark {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
