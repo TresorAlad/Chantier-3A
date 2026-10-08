@@ -9,9 +9,9 @@
 
 	@assets path /assets/*
 	header @assets Cache-Control "public, max-age=31536000, immutable"
-	# HTML and other unhashed files: always revalidate so a deploy shows up at once
+	# HTML et repli SPA (/inscription/*, admin) : toujours revalider apres deploy
 	@other not path /assets/*
-	header @other Cache-Control "no-cache"
+	header @other Cache-Control "no-cache, must-revalidate"
 
 	handle /assets/* {
 		file_server

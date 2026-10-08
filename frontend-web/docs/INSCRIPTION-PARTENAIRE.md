@@ -2,18 +2,18 @@
 
 L’équipe landing **n’a pas besoin** de recoder la billetterie : elle pointe vers des **URL fixes** qui ouvrent le **même formulaire** (8 étapes) et le **même flux e-mail / paiement** que la vitrine TDEV.
 
-Base production (exemple) : `https://billeterie-kohl.vercel.app`
+Base production : **`https://festival.ourtdev.com`**
 
 ## Pass gratuit (Pass Festival)
 
 - **URL recommandée** : `/inscription/pass-festival`
-- Exemple : `https://billeterie-kohl.vercel.app/inscription/pass-festival`
+- Exemple : `https://festival.ourtdev.com/inscription/pass-festival`
 - Flux : formulaire → validation → **billet par e-mail** (si SMTP configuré côté API).
 
 ## Pass payant Nexus Night (5 000 FCFA)
 
 - **URL recommandée** : `/inscription/nexus-night`
-- Exemple : `https://billeterie-kohl.vercel.app/inscription/nexus-night`
+- Exemple : `https://festival.ourtdev.com/inscription/nexus-night`
 - Flux : formulaire → **paiement FedaPay** → billets par e-mail (Festival + Nexus).
 
 ## Alias acceptés
@@ -30,7 +30,7 @@ Exemple : `/inscription?pass=vip`
 ### 1. Lien simple (recommandé)
 
 ```html
-<a href="https://billeterie-kohl.vercel.app/inscription/pass-festival" target="_blank" rel="noopener">
+<a href="https://festival.ourtdev.com/inscription/pass-festival" target="_blank" rel="noopener">
   S’inscrire gratuitement
 </a>
 ```
@@ -40,7 +40,7 @@ Exemple : `/inscription?pass=vip`
 ```javascript
 function ouvrirInscriptionGratuite() {
   window.open(
-    'https://billeterie-kohl.vercel.app/inscription/pass-festival?embed=1',
+    'https://festival.ourtdev.com/inscription/pass-festival?embed=1',
     'inscription-tdev',
     'width=520,height=720,scrollbars=yes,resizable=yes'
   );
@@ -52,7 +52,7 @@ function ouvrirInscriptionGratuite() {
 ```html
 <iframe
   title="Inscription TDEV Festival"
-  src="https://billeterie-kohl.vercel.app/inscription/pass-festival?embed=1"
+  src="https://festival.ourtdev.com/inscription/pass-festival?embed=1"
   width="100%"
   height="780"
   style="border:0;border-radius:12px;max-width:560px;"

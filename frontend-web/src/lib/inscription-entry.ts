@@ -36,8 +36,9 @@ export function resolveInscriptionListing(
   searchParams: URLSearchParams,
 ): BilletterieListingProduct | null {
   const segments = pathname.split('/').filter(Boolean);
+  const root = segments[0]?.toLowerCase() ?? '';
   const last = segments[segments.length - 1]?.toLowerCase() ?? '';
-  if (segments[0] === 'inscription' && last && last !== 'inscription') {
+  if (root === 'inscription' && last && last !== 'inscription') {
     const tier = tierFromSlug(last);
     if (tier) return listingForTier(tier);
   }
